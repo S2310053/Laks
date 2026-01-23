@@ -14,9 +14,9 @@ import numpy as np
 #  
 fileName = "Fish_Pool_Data.xls"
 
-xls        = pd.ExcelFile(fileName)
-sheetNames = np.flip(np.array(xls.sheet_names))
-datasetList   = []
+xls         = pd.ExcelFile(fileName)
+sheetNames  = np.flip(np.array(xls.sheet_names))
+datasetList = []
 
 for i in range(0, len(sheetNames)):
     data            = f"data{sheetNames[i]}"
