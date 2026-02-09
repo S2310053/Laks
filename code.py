@@ -129,3 +129,73 @@ def loadSSBPriceData(fileName):
 
 fileName     = "SSB_Price_Data.xlsx"
 dataSSBPrice = loadSSBPriceData(fileName)
+
+##
+#  This section uploads, transforms and cleans the Escapes time series data
+#  From week 12 January 2006 to 19 January 2026
+#  @dataset Directory of fisheries reported escapes per species
+#  @return "event" reported escapes per species, region, and company
+#
+def loadEscapesData(fileName):
+
+    data                     = pd.read_excel(fileName)
+    selectColumns            = ["Dato", "Lokalitets- navn", "Lokalitets- nummer", "Fylke", 
+                                "Selskap", "Art", "Rømmings- estimat", "Rapportert rømt",
+                                "Snittvekt (gram)", "Gjenfangst"]
+    dataClean                = data[selectColumns]
+    dataClean.loc[:,"Dato"]  = pd.to_datetime(dataClean["Dato"], format = "%m/%d/%Y").dt.date   
+    dataClean                = dataClean.sort_values("Dato", ascending=True)
+    dataClean                = dataClean.reset_index(drop = True)                      
+    columnNames              = ["Date", "Site_Name", "Site_Number", "County", "Company", 
+                                "Species", "Est_Num_Escaped", "Rep_Escaped", "Avg_Wt_Grams",
+                                "Recapture"]
+    dataClean.columns        = columnNames
+
+    return dataClean
+
+fileName = "Escapes_Data.xlsx"
+dataEscapes = loadEscapesData(fileName)
+
+##
+#  This section uploads, transforms and cleans the Biomass time series data
+#  From October 2017 to December 2025
+#  @dataset Ministry of fisheries detailed biomass data
+#  @return  "panel" monthly production-area-level aquaculture data on stock, biomass,
+#           feed, harvest, and losses
+#
+def loadBiomassData(fileName): 
+
+    data = pd.read_excel(fileName, sheet_name="Biomasse-prod-omr", skiprows=5)
+    selectColumns = ["ÅR", " MÅNED_KODE", " PO_KODE", " PO_NAVN", " ARTSID",
+                    " BEHFISK_STK", " BIOMASSE_KG", " UTSETT_SMOLT_STK",
+                    " FORFORBRUK_KG", " UTTAK_KG", " UTTAK_STK", " DØDFISK_STK",
+                    " UTKAST_STK", " RØMMING_STK", " ANDRE_STK"]
+    dataClean = data[selectColumns]
+    columnNames = ["Year", "Month", "Prod_Area_Code", "Prod_Area_Name", "Species", "Fish_Stock",
+                "Biomass_Kg", "Smolt_Stock", "Feed_Kg", "Harvest_Kg", "Harvest_N",
+                "Mortality_N", "Discard_N", "Escape_N", "Other_Loss_N"]
+    dataClean.columns = columnNames
+
+    return dataClean
+
+fileName = "Biomass_Data.xlsx"
+dataBiomass = loadBiomassData(fileName)
+
+##
+#  This section uploads, transforms and cleans the German pig price time series data
+#  From 30 December 2013 to 26 January 2026
+#  @dataset """"
+#  @return  weekly German pig prices ############
+#
+def loadPigPriceData(fileName):
+
+    data         = pd.read_excel(fileName, skiprows=1)
+    columnNames  = ["Date", "Price"]
+    data.columns = columnNames
+    data["Date"] = pd.to_datetime(data["Date"])
+    dataClean    = data.sort_values("Date", ascending=True).reset_index(drop=True)
+    
+    return dataClean
+
+fileName = "German_Pig_Price_Data.xlsx"
+dataGermanPigPrice = loadPigPriceData(fileName)
