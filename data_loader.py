@@ -1,5 +1,5 @@
 ##
-#  This program loads, transforms and processes the data needed
+#  This class loads, transforms and processes the data needed
 ##
 
 ##
@@ -18,6 +18,7 @@ class DataLoader:
         self._cpi          = "Consumer_Price_Index_Data.xlsx"
         self._eurNok       = "EURNOK_Data.xlsx"
         self._exportSalmon = "SSB_Price_Data.xlsx"
+        self._escapes      = "Escapes_Data.xlsx"
         self._biomass      = "Biomass_Data.xlsx"
         self._pigPrice     = "German_Pig_Price_Data.xlsx"
 
@@ -43,6 +44,8 @@ class DataLoader:
         datasets           = [globals()[name] for name in datasetList]
         dataClean          = pd.concat(datasets, ignore_index = True)
         dataClean["Month"] = pd.to_datetime(dataClean["Month"], format = "%B").dt.month
+        dataClean.rename(columns = {"NOK/kg": "NOK_kg",
+                                    "EUR/kg": "EUR_kg"}, inplace = True)
 
         return dataClean
 
@@ -55,7 +58,7 @@ class DataLoader:
     #  @dataset SSB Norwegian CPI
     #  @return Monthly or Annual CPI in percentage (%)
     #
-    def loadCPIData(self, frequency):
+    def loadCPIData(self, frequency = "Monthly"):
 
         fileName      = self._cpi
         data          = pd.read_excel(fileName)
@@ -94,7 +97,7 @@ class DataLoader:
 
         else:
 
-            dataClean = "Select a valid frequency: Monthly or annual"
+            dataClean = "Select a valid frequency: Monthly or Annual"
 
         return dataClean
 
@@ -132,7 +135,7 @@ class DataLoader:
         data         = pd.read_excel(fileName, header = None)
         data         = data.loc[3:,1:]
         data         = data.loc[:data.dropna(how = "all").index[-1]]
-        data.columns = ["Date", "Exported_Tons", "NOK/kg"]
+        data.columns = ["Date", "Exported_Tons", "NOK_kg"]
 
         dataClean          = data.reset_index(drop = True)
         dataClean["Year"]  = dataClean["Date"].astype(str).str[:4].astype(int)
@@ -141,7 +144,7 @@ class DataLoader:
                                             format= "%Y-W%W-%w").dt.month
         
         dataClean = dataClean.drop(columns = ["Date"])
-        dataClean = dataClean[["Year", "Week", "Month", "Exported_Tons", "NOK/kg"]]
+        dataClean = dataClean[["Year", "Week", "Month", "Exported_Tons", "NOK_kg"]]
 
         return dataClean
 
@@ -156,7 +159,7 @@ class DataLoader:
     #
     def loadEscapesData(self):
 
-        fileName                 = self._biomass
+        fileName                 = self._escapes
         data                     = pd.read_excel(fileName)
         selectColumns            = ["Dato", "Lokalitets- navn", "Lokalitets- nummer", "Fylke", 
                                     "Selskap", "Art", "Rømmings- estimat", "Rapportert rømt",
