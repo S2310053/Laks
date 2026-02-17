@@ -6,6 +6,7 @@
 # Imports libraries needed
 #
 from data_loader import DataLoader
+import matplotlib.pyplot as plt
 
 
 ##
@@ -20,4 +21,6 @@ dataEscapes           = loadData.loadEscapesData()
 dataBiomass           = loadData.loadBiomassData()
 dataPigPrice          = loadData.loadPigPriceData()
 
-print(dataSalmonExportPrice) 
+
+print(dataEscapes)
+#print(dataEscapes.columns)

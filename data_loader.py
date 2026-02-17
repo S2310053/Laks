@@ -172,6 +172,8 @@ class DataLoader:
                                     "Species", "Est_Num_Escaped", "Rep_Escaped", "Avg_Wt_Grams",
                                     "Recapture"]
         dataClean.columns        = columnNames
+        dataClean                = dataClean[dataClean["Species"] == "Laks"]
+        dataClean                = dataClean.reset_index(drop = True) 
 
         return dataClean
 
@@ -198,6 +200,8 @@ class DataLoader:
                         "Biomass_Kg", "Smolt_Stock", "Feed_Kg", "Harvest_Kg", "Harvest_N",
                         "Mortality_N", "Discard_N", "Escape_N", "Other_Loss_N"]
         dataClean.columns = columnNames
+        dataClean         = dataClean[dataClean["Species"] == "LAKS"]
+        dataClean         = dataClean.reset_index(drop = True) 
 
         return dataClean
 
