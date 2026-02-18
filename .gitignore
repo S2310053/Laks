@@ -1,7 +1,17 @@
-# Python
+# Python cache
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 
-# Editor backup files
+# Jupyter
+.ipynb_checkpoints/
+
+# Editor backups
 *~
-*.un/
+*.un~
+
+# OS files
+.DS_Store
+Thumbs.db
+

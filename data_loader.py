@@ -14,13 +14,13 @@ import numpy as np
 class DataLoader:
 
     def __init__(self):
-        self._fishPool     = "Fish_Pool_Data.xls"
-        self._cpi          = "Consumer_Price_Index_Data.xlsx"
-        self._eurNok       = "EURNOK_Data.xlsx"
-        self._exportSalmon = "SSB_Price_Data.xlsx"
-        self._escapes      = "Escapes_Data.xlsx"
-        self._biomass      = "Biomass_Data.xlsx"
-        self._pigPrice     = "German_Pig_Price_Data.xlsx"
+        self._fishPool     = "Data/Fish_Pool_Data.xls"
+        self._cpi          = "Data/Consumer_Price_Index_Data.xlsx"
+        self._eurNok       = "Data/EURNOK_Data.xlsx"
+        self._exportSalmon = "Data/SSB_Price_Data.xlsx"
+        self._escapes      = "Data/Escapes_Data.xlsx"
+        self._biomass      = "Data/Biomass_Data.xlsx"
+        self._pigPrice     = "Data/German_Pig_Price_Data.xlsx"
 
     
     ##
@@ -183,7 +183,7 @@ class DataLoader:
     ##
     #  This section uploads, transforms and cleans the Biomass time series data
     #  From October 2017 to December 2025
-    #  @dataset Ministry of fisheries detailed biomass data
+    #  @dataset Directory of fisheries detailed biomass data
     #  @return  "panel" monthly production-area-level aquaculture data on stock, biomass,
     #           feed, harvest, and losses
     #
