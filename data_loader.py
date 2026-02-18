@@ -3,7 +3,7 @@
 ##
 
 ##
-#  This section imports libraries needed
+#  Imports libraries needed
 #
 import pandas as pd
 import numpy as np
@@ -25,7 +25,7 @@ class DataLoader:
         pass
 
     ##
-    #  This section uploads, transforms and cleans the salmon price time series data
+    #  Uploads, transforms and cleans the salmon price time series data
     #  From 1st week of january 2006 to 3rd week of january 2026
     #  @dataset Fish Pool Index 3-6 kg Norwegian salmon price
     #  @return weekly salmon price per kg, in NOK and EUR
@@ -49,7 +49,7 @@ class DataLoader:
         return dataClean
 
     ##
-    #  This section uploads, transforms and cleans the CPI time series data
+    #  Uploads, transforms and cleans the CPI time series data
     #  From January 1932 to December 2025
     #  @dataset SSB Norwegian CPI
     #  @return Monthly or Annual CPI in percentage (%)
@@ -95,7 +95,7 @@ class DataLoader:
         return dataClean
 
     ##
-    #  This section uploads, transforms and cleans the EURNOK time series data
+    #  Uploads, transforms and cleans the EURNOK time series data
     #  From 24 January 2000 to 22 January 2026
     #  @dataset Norges Bank EURNOK spot price
     #  @return daily EURNOK spot price
@@ -111,7 +111,7 @@ class DataLoader:
         return dataClean
 
     ##
-    #  This section uploads, transforms and cleans the Salmon Export Price time series data
+    #  Uploads, transforms and cleans the Salmon Export Price time series data
     #  From week 1 January 2000 to week 3 January 2026
     #  @dataset SSB exported salmon tons and price 
     #  @return weekly exported salmon tons and price per kilogram in NOK
@@ -136,7 +136,7 @@ class DataLoader:
         return dataClean
 
     ##
-    #  This section uploads, transforms and cleans the Escapes time series data
+    #  Uploads, transforms and cleans the Escapes time series data
     #  From week 12 January 2006 to 19 January 2026
     #  @dataset Directory of fisheries reported escapes per species
     #  @return "event" reported escapes per species, region, and company
@@ -162,7 +162,7 @@ class DataLoader:
         return dataClean
 
     ##
-    #  This section uploads, transforms and cleans the Biomass time series data
+    #  Uploads, transforms and cleans the Biomass time series data
     #  From October 2017 to December 2025
     #  @dataset Directory of fisheries detailed biomass data
     #  @return  "panel" monthly production-area-level aquaculture data on stock, biomass,
@@ -187,7 +187,7 @@ class DataLoader:
         return dataClean
 
     ##
-    #  This section uploads, transforms and cleans the German pig price time series data
+    #  Uploads, transforms and cleans the German pig price time series data
     #  From 30 December 2013 to 26 January 2026
     #  @dataset """"
     #  @return  weekly German pig prices ############
@@ -202,6 +202,3 @@ class DataLoader:
         dataClean     = _data.sort_values("Date", ascending=True).reset_index(drop=True)
         
         return dataClean
-
-    #_fileName = "German_Pig_Price_Data.xlsx"
-    #dataGermanPigPrice = loadPigPriceData(_fileName)
