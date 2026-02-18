@@ -8,8 +8,9 @@
 import pandas as pd
 import numpy as np
 
-# This class loads, processes the diverse salmon _data time series
-# presented. For each dataset, returns the clean version.
+##
+# This class loads, processes the several salmon data time series
+# addressed in the Thesis. For each dataset, returns the clean version.
 #
 class DataLoader:
 
