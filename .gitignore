@@ -4,8 +4,4 @@ __pycache__/
 
 # Editor backup files
 *~
-*.un~
-
-# Data folder
-Data/
- 
+*.un/
