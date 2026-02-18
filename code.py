@@ -22,5 +22,5 @@ dataBiomass           = loadData.loadBiomassData()
 dataPigPrice          = loadData.loadPigPriceData()
 
 
-print(dataEscapes)
+print(dataPigPrice)
 #print(dataEscapes.columns)
