@@ -31,7 +31,7 @@ class DataLoader:
     #  @dataset Fish Pool Index 3-6 kg Norwegian salmon price
     #  @return weekly salmon price per kg, in NOK and EUR
     #  
-    def loadFishPoolData(self):
+    def FishPoolData(self):
 
         _fileName    = self.FISH_POOL
         _xls         = pd.ExcelFile(_fileName)
@@ -55,7 +55,7 @@ class DataLoader:
     #  @dataset SSB Norwegian CPI
     #  @return Monthly or Annual CPI in percentage (%)
     #
-    def loadCPIData(self, frequency = "Monthly"):
+    def CPIData(self, frequency = "Monthly"):
 
         _fileName      = self.CPI
         _data          = pd.read_excel(_fileName)
@@ -101,7 +101,7 @@ class DataLoader:
     #  @dataset Norges Bank EURNOK spot price
     #  @return daily EURNOK spot price
     #
-    def loadEURNOKData(self):
+    def EURNOKData(self):
 
         _fileName         = self.EURNOK
         _data             = pd.read_excel(_fileName, skiprows= 21, header= None)
@@ -117,7 +117,7 @@ class DataLoader:
     #  @dataset SSB exported salmon tons and price 
     #  @return weekly exported salmon tons and price per kilogram in NOK
     #
-    def loadSSBPriceData(self):
+    def SSBPriceData(self):
 
         _fileName     = self.EXPORT_SALMON
         _data         = pd.read_excel(_fileName, header = None)
@@ -142,7 +142,7 @@ class DataLoader:
     #  @dataset Directory of fisheries reported escapes per species
     #  @return "event" reported escapes per species, region, and company
     #
-    def loadEscapesData(self):
+    def EscapesData(self):
 
         _fileName                 = self.ESCAPES
         _data                     = pd.read_excel(_fileName)
@@ -169,7 +169,7 @@ class DataLoader:
     #  @return  "panel" monthly production-area-level aquaculture data on stock, biomass,
     #           feed, harvest, and losses
     #
-    def loadBiomassData(self): 
+    def BiomassData(self): 
 
         _fileName      = self.BIOMASS
         _data          = pd.read_excel(_fileName, sheet_name="Biomasse-prod-omr", skiprows=5)
@@ -193,7 +193,7 @@ class DataLoader:
     #  @dataset """"
     #  @return  weekly German pig prices ############
     #
-    def loadPigPriceData(self):
+    def PigPriceData(self):
 
         _fileName     = self.PIGPRICE
         _data         = pd.read_excel(_fileName, skiprows=1)

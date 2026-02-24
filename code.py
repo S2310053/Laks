@@ -13,14 +13,15 @@ import matplotlib.pyplot as plt
 # Loads the data
 #
 loadData              = DataLoader()
-dataSalmonPrice       = loadData.loadFishPoolData()
-dataCpi               = loadData.loadCPIData()
-dataEurnok            = loadData.loadEURNOKData()
-dataSalmonExportPrice = loadData.loadSSBPriceData()
-dataEscapes           = loadData.loadEscapesData()
-dataBiomass           = loadData.loadBiomassData()
-dataPigPrice          = loadData.loadPigPriceData()
-
+dataSalmonPrice       = loadData.FishPoolData()
+dataCpi               = loadData.CPIData()
+dataEurnok            = loadData.EURNOKData()
+dataSalmonExportPrice = loadData.SSBPriceData()
+dataEscapes           = loadData.EscapesData()
+dataBiomass           = loadData.BiomassData()
+dataPigPrice          = loadData.PigPriceData()
 
 print(dataPigPrice)
+print(dataPigPrice.columns)
+
 #print(dataEscapes.columns)
