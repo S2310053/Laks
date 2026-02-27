@@ -21,7 +21,7 @@ dataEscapes           = loadData.EscapesData()
 dataBiomass           = loadData.BiomassData()
 dataPigPrice          = loadData.PigPriceData()
 
-print(dataPigPrice)
+print(dataPigPrice.info())
 print(dataPigPrice.columns)
 
 #print(dataEscapes.columns)

@@ -172,13 +172,13 @@ class DataLoader:
     def BiomassData(self): 
 
         _fileName      = self.BIOMASS
-        _data          = pd.read_excel(_fileName, sheet_name="Biomasse-prod-omr", skiprows=5)
-        _selectColumns = ["ÅR", " MÅNED_KODE", " PO_KODE", " PO_NAVN", " ARTSID",
+        _data          = pd.read_excel(_fileName, sheet_name="Biomasse-flk", skiprows=5)
+        _selectColumns = ["ÅR", " MÅNED_KODE", " FYLKE", " ARTSID",
                         " BEHFISK_STK", " BIOMASSE_KG", " UTSETT_SMOLT_STK",
                         " FORFORBRUK_KG", " UTTAK_KG", " UTTAK_STK", " DØDFISK_STK",
                         " UTKAST_STK", " RØMMING_STK", " ANDRE_STK"]
         dataClean      = _data[_selectColumns]
-        _columnNames   = ["Year", "Month", "Prod_Area_Code", "Prod_Area_Name", "Species", "Fish_Stock",
+        _columnNames   = ["Year", "Month", "County", "Species", "Fish_Stock",
                         "Biomass_Kg", "Smolt_Stock", "Feed_Kg", "Harvest_Kg", "Harvest_N",
                         "Mortality_N", "Discard_N", "Escape_N", "Other_Loss_N"]
         dataClean.columns = _columnNames
