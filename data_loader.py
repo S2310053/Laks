@@ -104,7 +104,7 @@ class DataLoader:
     #  Uploads, cleans and transforms the EURNOK time series data
     #  From 24 January 2000 to 22 January 2026
     #  @dataset Norges Bank EURNOK spot price
-    #  @return daily EURNOK mid price
+    #  @return weekly EURNOK mid price
     #
     def loadEURNOKData(self):
 
@@ -245,9 +245,6 @@ class DataLoader:
     def Inflation(self):
 
         _data                              = self.loadCPIData()
-        _data["Inflation_SSB_Monthly"]     = _data["CPI_SSB_Monthly"].pct_change()
-        _data["Log_Inflation_SSB_Monthly"] = np.log(1 + _data["Inflation_SSB_Monthly"])
-        _data                              = _data.iloc[1:].reset_index(drop = True)
         _data["Year"]                      = _data["Date"].dt.year
         _data["Month"]                     = _data["Date"].dt.month
         dataTransform                      = _data.drop(columns = ["Date"])
@@ -257,8 +254,6 @@ class DataLoader:
                                            "Year"                     : "int64",
                                            "Month"                    : "int64",
                                            "CPI_SSB_Monthly"          : "float64",
-                                           "Inflation_SSB_Monthly"    : "float64",
-                                           "Log_Inflation_SSB_Monthly": "float64"
                                            })
          
         return dataTransform
@@ -375,6 +370,8 @@ class DataLoader:
 
     ###
     #   Merge everything
+    #   @datasets retrieved from various providers in weekly and monthly conventions
+    #   @return weekly observations per feature, containing full information
     #
     def Data(self):
         _data      = self.SalmonPriceFP()
@@ -384,15 +381,24 @@ class DataLoader:
         _escapes   = self.Escapes()
         _biomass   = self.Biomass()
 
-        data = _data.copy()
+        data       = _data.copy()
 
         # Weekly merges
         for w in [_salmon, _eurnok, _escapes]:
-            w = w.drop(columns=["Month"], errors="ignore")
-            data = data.merge(w, on=["Year", "Week"], how="left")
+            w    = w.drop(columns=["Month"], errors="ignore")
+            data = data.merge(w, on=["Year", "Week"], how="left", validate="one_to_one")
 
         # Monthly merges
         for m in [_inflation, _biomass]:
             data = data.merge(m, on=["Year", "Month"], how="left")
+        
+        data = data.iloc[1:-3].reset_index(drop = True)
+        data.insert(0, "t", range(len(data)))
+        data.insert(0, "Date",
+                    pd.to_datetime(
+                        data["Year"].astype(str) + "-W" + data["Week"].astype(str) + "-1",
+                        format = "%G-W%V-%u"
+                    ).dt.to_period("W")
+                    )
 
         return data
