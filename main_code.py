@@ -22,8 +22,6 @@ loadData              = DataLoader()
 
 DATA = loadData.Data()
 print(DATA)
-print("RUNNING SCRIPT:", __name__)
-
 
 #data = loadData.loadExportData()
 

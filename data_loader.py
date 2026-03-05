@@ -425,6 +425,5 @@ class DataLoader:
                 format="%G-W%V-%u"
             ).dt.to_period("W")
         )
-        print("DATA FUNCTION CALLED")
-
+        
         return data
