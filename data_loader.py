@@ -21,14 +21,15 @@ class DataLoader:
     ESCAPES       = "Data/Escapes_Data.xlsx"
     BIOMASS       = "Data/Biomass_Data.xlsx"
     PIGPRICE      = "Data/German_Pig_Price_Data.xlsx"
+    EXPORT        = "Data/Export_Data.xlsx"
 
     def __init__(self):
         pass
 
-    ##
-    # Upload the raw files and gets rid of the noise of
-    # unnecesary columns and formats
-    #
+    ##                                                 ##
+    # Upload the raw files and gets rid of the noise of #
+    # unnecesary columns and formats                    #
+    #                                                   #
 
     ##
     #  Uploads, cleans and transforms the salmon price time series data
@@ -214,9 +215,27 @@ class DataLoader:
         return dataClean
     
     ##
-    # Transforms and makes the frequency, and object type adjustments
-    # to the variables
+    #  Uploads, cleans and transforms the salmon export  time series data
+    #  From January 2005 to December 2025
+    #  @dataset """"
+    #  @return  monthly salmon exports in weight and value in USD ############
     #
+    def loadExportData(self):
+
+        _fileName         = self.EXPORT
+        _data             = pd.read_excel(_fileName, sheet_name= "Sheet1")
+        _selectColumns    = ["refPeriodId", "netWgt", "primaryValueUSD", "AvgValueKg"]
+        dataClean         = _data[_selectColumns].copy()
+        _columnNames      = ["Date", "Net_Weight_Kg_Export_Monthly", "Value_USD_Export_Monthly", "Average_Price_USD_Kg_Export_Monthly"]
+        dataClean.columns = _columnNames
+        dataClean["Date"] = pd.to_datetime(dataClean["Date"], format = "%Y%m%d")
+
+        return dataClean
+    
+    ##                                                               ##
+    # Transforms and makes the frequency, and object type adjustments #
+    # to the variables                                                #
+    #                                                                 #
 
     ##
     # Validates frequency match in weeks and object data types
@@ -239,10 +258,9 @@ class DataLoader:
     ##
     # Validates frequency match in months and object data types
     # @dataset from loadCPIData
-    # @return monthly dates as integers and prices as float, with inflation
-    #         and log inflation measures
+    # @return monthly dates as integers and prices as float
     #
-    def Inflation(self):
+    def Cpi(self):
 
         _data                              = self.loadCPIData()
         _data["Year"]                      = _data["Date"].dt.year
@@ -375,7 +393,7 @@ class DataLoader:
     #
     def Data(self):
         _data      = self.SalmonPriceFP()
-        _inflation = self.Inflation()
+        _cpi       = self.Cpi()
         _eurnok    = self.Eurnok()
         _salmon    = self.SalmonPriceSSB()
         _escapes   = self.Escapes()
@@ -389,7 +407,7 @@ class DataLoader:
             data = data.merge(w, on=["Year", "Week"], how="left", validate="one_to_one")
 
         # Monthly merges
-        for m in [_inflation, _biomass]:
+        for m in [_cpi, _biomass]:
             data = data.merge(m, on=["Year", "Month"], how="left")
         
         data = data.iloc[1:-3].reset_index(drop = True)
