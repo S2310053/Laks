@@ -8,7 +8,7 @@
 from data_loader import DataLoader
 
 import matplotlib
-matplotlib.use("TkAgg")
+#matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -20,10 +20,12 @@ import seaborn as sns
 #
 loadData              = DataLoader()
 
-#DATA = loadData.Data()
+DATA = loadData.Data()
+print(DATA)
+print("RUNNING SCRIPT:", __name__)
 
 
-data = loadData.loadExportData()
+#data = loadData.loadExportData()
 
-print(data)
-print(data.columns)
+#print(data)
+#print(data.columns)

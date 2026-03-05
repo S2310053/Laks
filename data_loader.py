@@ -139,7 +139,7 @@ class DataLoader:
         dataClean["Year"]  = dataClean["Date"].astype(str).str[:4].astype(int)
         dataClean["Week"]  = dataClean["Date"].astype(str).str[5:].astype(int)
         dataClean["Month"] = pd.to_datetime(dataClean["Date"].astype(str).str[:4] + "-W" + dataClean["Date"].astype(str).str[5:] + "-1",
-                                            format= "%Y-W%W-%w").dt.month
+                                            format= "%G-W%V-%u").dt.month
         
         dataClean = dataClean.drop(columns = ["Date"])
         dataClean = dataClean[["Year", "Week", "Month", "Exported_Tons_SSB_Weekly", "NOK_kg_SSB_Weekly"]]
@@ -262,18 +262,18 @@ class DataLoader:
     #
     def Cpi(self):
 
-        _data                              = self.loadCPIData()
-        _data["Year"]                      = _data["Date"].dt.year
-        _data["Month"]                     = _data["Date"].dt.month
-        dataTransform                      = _data.drop(columns = ["Date"])
-        dataTransform                      = dataTransform[["Year", "Month"] 
-                                                       + list(dataTransform.columns.drop(["Year", "Month"]))]
-        dataTransform                      = dataTransform.astype({
-                                           "Year"                     : "int64",
-                                           "Month"                    : "int64",
-                                           "CPI_SSB_Monthly"          : "float64",
-                                           })
-         
+        _data          = self.loadCPIData()
+        _data["Year"]  = _data["Date"].dt.year
+        _data["Month"] = _data["Date"].dt.month
+        dataTransform  = _data.drop(columns = ["Date"])
+        dataTransform  = dataTransform[["Year", "Month"] 
+                         + list(dataTransform.columns.drop(["Year", "Month"]))]
+        dataTransform  = dataTransform.astype({
+                        "Year"            : "int64",
+                        "Month"           : "int64",
+                        "CPI_SSB_Monthly" : "float64",
+                        })
+        
         return dataTransform
     
     ##
@@ -329,19 +329,20 @@ class DataLoader:
         _data         = _data.set_index("Date")
         _data.loc[_data["Rep_Escaped"] == "E:10 - 100", "Rep_Escaped"] = "55"
         _data["Rep_Escaped"] = (
-        _data["Rep_Escaped"]
-        .fillna("0")
-        .str.replace("E:", "", regex=False)
-        )
+                                _data["Rep_Escaped"]
+                                .astype(str)
+                                .fillna("0")
+                                .str.replace("E:", "", regex=False)
+                                )
         _data["Rep_Escaped"] = pd.to_numeric(_data["Rep_Escaped"], errors="coerce")
-        dataTransform        = _data.resample("W").agg({
+        dataTransform        = _data.resample("W-MON").agg({
                               "Rep_Escaped" : "sum",
                               "Avg_Wt_Grams": "mean",
                               "Recapture"   : "sum"
                               })
         
         dataTransform          = dataTransform.reset_index()
-        _colNames               = ["Date", "Rep_Escaped_DF_Weekly", "Avg_Wt_Grams_DF_Weekly", "Recapture_DF_Weekly" ]
+        _colNames              = ["Date", "Rep_Escaped_DF_Weekly", "Avg_Wt_Grams_DF_Weekly", "Recapture_DF_Weekly" ]
         dataTransform.columns  = _colNames
         dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
         dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
@@ -401,6 +402,10 @@ class DataLoader:
 
         data       = _data.copy()
 
+        assert not _salmon.duplicated(["Year","Week"]).any()
+        assert not _eurnok.duplicated(["Year","Week"]).any()
+        assert not _escapes.duplicated(["Year","Week"]).any()
+
         # Weekly merges
         for w in [_salmon, _eurnok, _escapes]:
             w    = w.drop(columns=["Month"], errors="ignore")
@@ -412,11 +417,14 @@ class DataLoader:
         
         data = data.iloc[1:-3].reset_index(drop = True)
         data.insert(0, "t", range(len(data)))
-        data.insert(0, "Date",
-                    pd.to_datetime(
-                        data["Year"].astype(str) + "-W" + data["Week"].astype(str) + "-1",
-                        format = "%G-W%V-%u"
-                    ).dt.to_period("W")
-                    )
+        data.insert(
+            0,
+            "Date",
+            pd.to_datetime(
+                data["Year"].astype(str) + "-W" + data["Week"].astype(str).str.zfill(2) + "-1",
+                format="%G-W%V-%u"
+            ).dt.to_period("W")
+        )
+        print("DATA FUNCTION CALLED")
 
         return data
