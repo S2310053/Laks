@@ -25,3 +25,5 @@ data = loadData.Data()
 #print(data)
 #print(data.columns)
 #print(data.info())
+
+#loadData.ValidateData(data)
