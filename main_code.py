@@ -20,10 +20,8 @@ import seaborn as sns
 #
 loadData              = DataLoader()
 
-DATA = loadData.Data()
-print(DATA)
-
-#data = loadData.loadExportData()
+data = loadData.Data()
 
 #print(data)
 #print(data.columns)
+#print(data.info())

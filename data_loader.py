@@ -14,14 +14,35 @@ import numpy as np
 #
 class DataLoader:
 
-    FISH_POOL     = "Data/Fish_Pool_Data.xls"
-    CPI           = "Data/Consumer_Price_Index_Data.xlsx"
-    EURNOK        = "Data/EURNOK_Data.xlsx"
-    EXPORT_SALMON = "Data/SSB_Price_Data.xlsx"
-    ESCAPES       = "Data/Escapes_Data.xlsx"
-    BIOMASS       = "Data/Biomass_Data.xlsx"
-    PIGPRICE      = "Data/German_Pig_Price_Data.xlsx"
-    EXPORT        = "Data/Export_Data.xlsx"
+    _salmon       = "Data/Salmon"
+    _salmonEquity = "/Equity/"
+    _salmonMarket = "/Market/"
+    _protein      = "Data/Protein/"
+    _currency     = "Data/Currency/"
+    _commodity    = "Data/Commodity/"
+
+    SALMON_PRICE_FISHPOOL  = _salmon + _salmonMarket + "Price_FishPool.xls"
+    SALMON_PRICE_SSB       = _salmon + _salmonMarket + "Price_SSB.xlsx"
+    SALMON_PRICE_BLOOMBERG = _salmon + _salmonMarket + "Price_Bloomberg.xlsx"
+    SALMON_EXPORTS         = _salmon + _salmonMarket + "Exports.xlsx"
+    SALMON_BIOMASS         = _salmon + _salmonMarket + "Biomass.xlsx"
+    SALMON_ESCAPES         = _salmon + _salmonMarket + "Escapes.xlsx"
+    CPI_NORWAY             = _salmon + _salmonMarket + "CPI.xlsx"
+
+    PROTEIN_CPI_MEAT       = _protein + "CPI_Meat.xlsx"
+    PROTEIN_PRICE_BROILER  = _protein + "Price_Broiler.xlsx"
+    PROTEIN_PRICE_PIG      = _protein + "Price_Pig.xlsx"
+   
+    CURRENCY_EURNOK        = _currency + "EURNOK.xlsx"
+    CURRENCY_USDNOK        = _currency + "USDNOK.xlsx"
+
+    COMMODITY_BRENT        = _commodity + "Price_Brent.xlsx"
+    COMMODITY_WHEAT        = _commodity + "Price_Wheat.xlsx"
+    COMMODITY_SOYBEAN      = _commodity + "Price_Soybean.xlsx"
+    COMMODITY_RAPSEED      = _commodity + "Price_Rapseed.xlsx"
+
+    EQUITY_PRICE_MOWI      = _salmon + _salmonEquity + "Price_MOWI.xlsx"
+    EQUITY_PRICE_SALMAR    = _salmon + _salmonEquity + "Price_SALMAR.xlsx"
 
     def __init__(self):
         pass
@@ -37,9 +58,10 @@ class DataLoader:
     #  @dataset Fish Pool Index 3-6 kg Norwegian salmon price
     #  @return weekly salmon price per kg, in NOK and EUR
     #  
-    def loadFishPoolData(self):
+    def SalmonPriceFishPool(self):
 
-        _fileName    = self.FISH_POOL
+        ## Clean: Load file and format
+        _fileName    = self.SALMON_PRICE_FISHPOOL
         _xls         = pd.ExcelFile(_fileName)
         _sheetNames  = np.flip(np.array(_xls.sheet_names))
         _datasetList = []
@@ -50,90 +72,35 @@ class DataLoader:
 
         dataClean = pd.concat(_datasetList, ignore_index=True)
         dataClean["Month"] = pd.to_datetime(dataClean["Month"], format="%B").dt.month
-        dataClean.rename(columns={"NOK/kg": "NOK_kg_FP_Weekly",
-                                "EUR/kg": "EUR_kg_FP_Weekly"}, inplace=True)
+        dataClean.rename(columns={"NOK/kg": "Salmon_NOK_kg_FP_Weekly",
+                                "EUR/kg": "Salmon_EUR_kg_FP_Weekly"}, inplace=True)
         
-        return dataClean
-
-    ##
-    #  Uploads, cleans and transforms the CPI time series data
-    #  From January 1932 to December 2025
-    #  @dataset SSB Norwegian CPI
-    #  @return Monthly or Annual CPI in percentage (%)
-    #
-    def loadCPIData(self, frequency = "Monthly"):
-
-        _fileName      = self.CPI
-        _data          = pd.read_excel(_fileName)
-        _data          = _data[:-2]
-        _data          = _data.iloc[::-1]
-
-        if frequency == "Annual":
-
-            dataClean         = _data.iloc[:,:2]
-            dataClean.columns = ["Year", "CPI_Annual"]
-            dataClean         = dataClean.reset_index(drop = True)
-
-        elif frequency == "Monthly":
-
-            _dataM         = _data.drop(columns = "Årsgj.snitt2")
-            _months        = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"]
-            _dataM.columns = ["Year"] + _months
-
-            _years  = _dataM["Year"].values.tolist()
-            _dates  = []
-            
-            for i in _years:
-                for j in _months:
-                    _dates.append(f"{i}-{j}-01")
-
-            _values = _dataM[_months].to_numpy().ravel().tolist()
-
-            _monthlyData = {"Date"       : _dates,
-                           "CPI_SSB_Monthly": _values}
-
-            dataClean         = pd.DataFrame(_monthlyData)
-            dataClean["Date"] = pd.to_datetime(dataClean["Date"], format = "%Y-%m-%d")
-
-        else:
-
-            dataClean = "Select a valid frequency: Monthly or Annual"
-
-        return dataClean
-
-    ##
-    #  Uploads, cleans and transforms the EURNOK time series data
-    #  From 24 January 2000 to 22 January 2026
-    #  @dataset Norges Bank EURNOK spot price
-    #  @return weekly EURNOK mid price
-    #
-    def loadEURNOKData(self):
-
-        _fileName                  = self.EURNOK
-        _data                      = pd.read_excel(_fileName, skiprows= 27, header= 0)
-        dataClean                  = _data.iloc[:,:3]
-        dataClean["EURNOK_RE_Weekly"] = (dataClean["Bid"] + dataClean["Ask"]) / 2
-        _selectColumns             = ["Exchange Date", "EURNOK_RE_Weekly"]
-        dataClean                  = dataClean[_selectColumns].rename(columns = {"Exchange Date": "Date"})
-        dataClean["Date"]          = pd.to_datetime(dataClean["Date"], format = "%Y-%m-%d")
-        dataClean                  = dataClean.sort_values("Date", ascending=True)
-        dataClean                  = dataClean.reset_index(drop = True)
-
-        return dataClean
-
+        ## Transform: validate datatypes and frequency match
+        dataTransform = dataClean.copy()
+        dataTransform = dataTransform.astype({
+                          "Year"                   : "int64",
+                          "Week"                   : "int64",
+                          "Month"                  : "int64",
+                          "Salmon_NOK_kg_FP_Weekly": "float64",
+                          "Salmon_EUR_kg_FP_Weekly": "float64"
+                           }) 
+        
+        return dataTransform
+    
     ##
     #  Uploads, cleans and transforms the Salmon Export Price time series data
     #  From week 1 January 2000 to week 3 January 2026
     #  @dataset SSB exported salmon tons and price 
     #  @return weekly exported salmon tons and price per kilogram in NOK
     #
-    def loadSSBPriceData(self):
+    def SalmonPriceSSB(self):
 
-        _fileName     = self.EXPORT_SALMON
+        ## Clean  
+        _fileName     = self.SALMON_PRICE_SSB
         _data         = pd.read_excel(_fileName, header = None)
         _data         = _data.loc[3:,1:]
         _data         = _data.loc[:_data.dropna(how = "all").index[-1]]
-        _data.columns = ["Date", "Exported_Tons_SSB_Weekly", "NOK_kg_SSB_Weekly"]
+        _data.columns = ["Date", "Salmon_Exported_Tons_SSB_Weekly", "Salmon_NOK_kg_SSB_Weekly"]
 
         dataClean          = _data.reset_index(drop = True)
         dataClean["Year"]  = dataClean["Date"].astype(str).str[:4].astype(int)
@@ -142,9 +109,132 @@ class DataLoader:
                                             format= "%G-W%V-%u").dt.month
         
         dataClean = dataClean.drop(columns = ["Date"])
-        dataClean = dataClean[["Year", "Week", "Month", "Exported_Tons_SSB_Weekly", "NOK_kg_SSB_Weekly"]]
+        dataClean = dataClean[["Year", "Week", "Month", "Salmon_Exported_Tons_SSB_Weekly", "Salmon_NOK_kg_SSB_Weekly"]]
 
-        return dataClean
+        ## Transform
+        dataTransform = dataClean.copy()
+        dataTransform = dataTransform.astype({
+                         "Year"                           : "int64",
+                         "Week"                           : "int64",
+                         "Month"                          : "int64",
+                         "Salmon_Exported_Tons_SSB_Weekly": "float64",
+                         "Salmon_NOK_kg_SSB_Weekly"       : "float64"
+                         })
+        
+        return dataTransform
+    
+    ##
+    #  Uploads, cleans and transforms the Salmon Export Fresh Price time series data
+    #  From 5 March 2000 to week 3 January 2026
+    #  @dataset from bloomberg ticker NOSMFSVL, exports fresh price, source SSB
+    #  @return weekly exported salmon price per kilogram in NOK
+    #
+    def SalmonPriceBloomberg(self):
+
+        ## Clean
+        _fileName         = self.SALMON_PRICE_BLOOMBERG
+        _data             = pd.read_excel(_fileName, header = 0)
+        dataClean         = _data.copy()
+        dataClean["Date"] = pd.to_datetime(dataClean["Date"], format = "%Y-%m-%d")
+        dataClean         = dataClean.sort_values("Date", ascending=True)
+        dataClean         = dataClean.rename(columns = {"Last Price" : "Salmon_NOK_kg_BB_Weekly"})
+        dataClean         = dataClean.reset_index(drop = True)
+
+        ## Transform
+        dataTransform          = dataClean.copy()
+        dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
+        dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+        dataTransform          = dataTransform.drop(columns = ["Date"])
+        dataTransform          = dataTransform[["Year", "Week", "Month"]
+                                       + list(dataTransform.columns.drop(["Year", "Week", "Month"]))]
+        dataTransform          = dataTransform.astype({
+                                "Year"                   : "int64",
+                                "Week"                   : "int64",
+                                "Month"                  : "int64",
+                                "Salmon_NOK_kg_BB_Weekly": "float64"
+                                })
+
+        return dataTransform
+
+    ##
+    #  Uploads, cleans and transforms the salmon export  time series data
+    #  From January 2005 to December 2025
+    #  @dataset """"
+    #  @return  monthly salmon exports in weight and value in USD ############
+    #
+    def SalmonExport(self):
+        
+        ## Clean
+        _fileName         = self.SALMON_EXPORTS
+        _data             = pd.read_excel(_fileName, sheet_name= "Sheet1")
+        _selectColumns    = ["refPeriodId", "netWgt", "primaryValueUSD", "AvgValueKg"]
+        dataClean         = _data[_selectColumns].copy()
+        _columnNames      = ["Date", "Salmon_Export_Net_Weight_Kg_Monthly", "Salmon_Export_Value_USD_Monthly"
+                             , "Salmon_Export_Avg_Price_USD_Kg_Monthly"]
+        dataClean.columns = _columnNames
+        dataClean["Date"] = pd.to_datetime(dataClean["Date"], format = "%Y%m%d")
+
+        ## Transform
+        dataTransform          = dataClean.copy()
+        dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+        dataTransform          = dataTransform.drop(columns = ["Date"])
+        dataTransform          = dataTransform[["Year", "Month"]
+                                       + list(dataTransform.columns.drop(["Year", "Month"]))]
+        dataTransform          = dataTransform.astype({
+                                "Year"                                  : "int64",
+                                "Month"                                 : "int64",
+                                "Salmon_Export_Net_Weight_Kg_Monthly"   : "float64",
+                                "Salmon_Export_Value_USD_Monthly"       : "float64",
+                                "Salmon_Export_Avg_Price_USD_Kg_Monthly": "float64"
+                                })
+
+        return dataTransform
+
+    ##
+    #  Uploads, cleans and transforms the Biomass time series data
+    #  From January 2000 to January 2026
+    #  @dataset Directory of fisheries detailed biomass data
+    #  @return  "panel" monthly production-area-level aquaculture data on stock, biomass,
+    #           feed, harvest, and losses
+    #
+    def SalmonBiomass(self): 
+
+        ## Cleans
+        _fileName      = self.SALMON_BIOMASS
+        _data          = pd.read_excel(_fileName, sheet_name="Biomasse-flk", skiprows=5)
+        _selectColumns = ["ÅR", " MÅNED_KODE", " FYLKE", " ARTSID",
+                        " BEHFISK_STK", " BIOMASSE_KG", " UTSETT_SMOLT_STK",
+                        " FORFORBRUK_KG", " UTTAK_KG", " UTTAK_STK", " DØDFISK_STK",
+                        " UTKAST_STK", " RØMMING_STK", " ANDRE_STK"]
+        dataClean      = _data[_selectColumns]
+        _columnNames   = ["Year", "Month", "Salmon_Biomass_County", "Salmon_Biomass_Species", "Salmon_Biomass_Fish_Stock",
+                        "Salmon_Biomass_Kg", "Salmon_Biomass_Smolt_Stock", "Salmon_Biomass_Feed_Kg", "Salmon_Biomass_Harvest_Kg", 
+                        "Salmon_Biomass_Harvest_N", "Salmon_Biomass_Mortality_N", "Salmon_Biomass_Discard_N", 
+                        "Salmon_Biomass_Escape_N", "Salmon_Biomass_Other_Loss_N"]
+        dataClean.columns = _columnNames
+        dataClean         = dataClean[dataClean["Salmon_Biomass_Species"] == "LAKS"]
+        dataClean         = dataClean.reset_index(drop = True) 
+
+        ## Transform
+        dataTransform = dataClean.copy()
+        dataTransform = (
+                         dataTransform
+                         .groupby(["Year", "Month"], as_index = False)
+                         .sum(numeric_only = True)
+        )
+        for col in dataTransform.columns:
+            if col not in ["Year", "Month"]:
+                dataTransform[col] = dataTransform[col].astype("float64")
+
+        _colRename = dataTransform.columns.difference(["Year", "Month"])
+
+        dataTransform = dataTransform.rename(
+            columns={col: col + "_Monthly" for col in _colRename}
+        )
+
+        return dataTransform
 
     ##
     #  Uploads, cleans and transforms the Escapes time series data
@@ -152,9 +242,10 @@ class DataLoader:
     #  @dataset Directory of fisheries reported escapes per species
     #  @return "event" reported escapes per species, region, and company
     #
-    def loadEscapesData(self):
-
-        _fileName                 = self.ESCAPES
+    def SalmonEscapes(self):
+        
+        ## Clean
+        _fileName                 = self.SALMON_ESCAPES
         _data                     = pd.read_excel(_fileName)
         _selectColumns            = ["Dato", "Lokalitets- navn", "Lokalitets- nummer", "Fylke", 
                                     "Selskap", "Art", "Rømmings- estimat", "Rapportert rømt",
@@ -163,186 +254,34 @@ class DataLoader:
         dataClean.loc[:,"Dato"]  = pd.to_datetime(dataClean["Dato"], format = "%m/%d/%Y").dt.date   
         dataClean                = dataClean.sort_values("Dato", ascending=True)
         dataClean                = dataClean.reset_index(drop = True)                      
-        _columnNames             = ["Date", "Site_Name", "Site_Number", "County", "Company", 
-                                    "Species", "Est_Num_Escaped", "Rep_Escaped", "Avg_Wt_Grams",
-                                    "Recapture"]
+        _columnNames             = ["Date", "Salmon_Escapes_Site_Name", "Salmon_Escapes_Site_Number", 
+                                    "Salmon_Escapes_County", "Salmon_Escapes_Company", "Salmon_Escapes_Species", 
+                                    "Salmon_Escapes_Est_Num_Escaped", "Salmon_Escapes_Rep_Escaped", "Salmon_Escapes_Avg_Wt_Grams",
+                                    "Salmon_Escapes_Recapture"]
         dataClean.columns        = _columnNames
-        dataClean                = dataClean[dataClean["Species"] == "Laks"]
+        dataClean                = dataClean[dataClean["Salmon_Escapes_Species"] == "Laks"]
         dataClean                = dataClean.reset_index(drop = True) 
 
-        return dataClean
-
-    ##
-    #  Uploads, cleans and transforms the Biomass time series data
-    #  From October 2017 to December 2025
-    #  @dataset Directory of fisheries detailed biomass data
-    #  @return  "panel" monthly production-area-level aquaculture data on stock, biomass,
-    #           feed, harvest, and losses
-    #
-    def loadBiomassData(self): 
-
-        _fileName      = self.BIOMASS
-        _data          = pd.read_excel(_fileName, sheet_name="Biomasse-flk", skiprows=5)
-        _selectColumns = ["ÅR", " MÅNED_KODE", " FYLKE", " ARTSID",
-                        " BEHFISK_STK", " BIOMASSE_KG", " UTSETT_SMOLT_STK",
-                        " FORFORBRUK_KG", " UTTAK_KG", " UTTAK_STK", " DØDFISK_STK",
-                        " UTKAST_STK", " RØMMING_STK", " ANDRE_STK"]
-        dataClean      = _data[_selectColumns]
-        _columnNames   = ["Year", "Month", "County", "Species", "Fish_Stock",
-                        "Biomass_Kg", "Smolt_Stock", "Feed_Kg", "Harvest_Kg", "Harvest_N",
-                        "Mortality_N", "Discard_N", "Escape_N", "Other_Loss_N"]
-        dataClean.columns = _columnNames
-        dataClean         = dataClean[dataClean["Species"] == "LAKS"]
-        dataClean         = dataClean.reset_index(drop = True) 
-
-        return dataClean
-
-    ##
-    #  Uploads, cleans and transforms the German pig price time series data
-    #  From 30 December 2013 to 26 January 2026
-    #  @dataset """"
-    #  @return  weekly German pig prices ############
-    #
-    def loadPigPriceData(self):
-
-        _fileName     = self.PIGPRICE
-        _data         = pd.read_excel(_fileName, skiprows=1)
-        _columnNames  = ["Date", "Price"]
-        _data.columns = _columnNames
-        _data["Date"] = pd.to_datetime(_data["Date"])
-        dataClean     = _data.sort_values("Date", ascending=True).reset_index(drop=True)
-        
-        return dataClean
-    
-    ##
-    #  Uploads, cleans and transforms the salmon export  time series data
-    #  From January 2005 to December 2025
-    #  @dataset """"
-    #  @return  monthly salmon exports in weight and value in USD ############
-    #
-    def loadExportData(self):
-
-        _fileName         = self.EXPORT
-        _data             = pd.read_excel(_fileName, sheet_name= "Sheet1")
-        _selectColumns    = ["refPeriodId", "netWgt", "primaryValueUSD", "AvgValueKg"]
-        dataClean         = _data[_selectColumns].copy()
-        _columnNames      = ["Date", "Net_Weight_Kg_Export_Monthly", "Value_USD_Export_Monthly", "Average_Price_USD_Kg_Export_Monthly"]
-        dataClean.columns = _columnNames
-        dataClean["Date"] = pd.to_datetime(dataClean["Date"], format = "%Y%m%d")
-
-        return dataClean
-    
-    ##                                                               ##
-    # Transforms and makes the frequency, and object type adjustments #
-    # to the variables                                                #
-    #                                                                 #
-
-    ##
-    # Validates frequency match in weeks and object data types
-    # @dataset from loadFishPoolData
-    # @return weekly dates as integers and prices as float
-    #
-    def SalmonPriceFP(self):
-
-        _data         = self.loadFishPoolData()
-        dataTransform = _data.astype({
-                          "Year"            : "int64",
-                          "Week"            : "int64",
-                          "Month"           : "int64",
-                          "NOK_kg_FP_Weekly": "float64",
-                          "EUR_kg_FP_Weekly": "float64"
-                           }) 
-        
-        return dataTransform
-
-    ##
-    # Validates frequency match in months and object data types
-    # @dataset from loadCPIData
-    # @return monthly dates as integers and prices as float
-    #
-    def Cpi(self):
-
-        _data          = self.loadCPIData()
-        _data["Year"]  = _data["Date"].dt.year
-        _data["Month"] = _data["Date"].dt.month
-        dataTransform  = _data.drop(columns = ["Date"])
-        dataTransform  = dataTransform[["Year", "Month"] 
-                         + list(dataTransform.columns.drop(["Year", "Month"]))]
-        dataTransform  = dataTransform.astype({
-                        "Year"            : "int64",
-                        "Month"           : "int64",
-                        "CPI_SSB_Monthly" : "float64",
-                        })
-        
-        return dataTransform
-    
-    ##
-    # Validates frequency match in weeks and object data types
-    # @dataset from loadEURNOKData
-    # @return weekly dates as integers and EURNOK as float
-    #
-    def Eurnok(self):
-
-        _data          = self.loadEURNOKData()
-        _data["Year"]  = _data["Date"].dt.isocalendar().year
-        _data["Week"]  = _data["Date"].dt.isocalendar().week
-        _data["Month"] = _data["Date"].dt.month
-        dataTransform  = _data.drop(columns = ["Date"])
-        dataTransform  = dataTransform[["Year", "Week", "Month"]
-                                       + list(dataTransform.columns.drop(["Year", "Week", "Month"]))]
-        dataTransform  = dataTransform.astype({
-                         "Year"            : "int64",
-                         "Week"            : "int64",
-                         "Month"           : "int64",
-                         "EURNOK_RE_Weekly": "float64"
-                         })
-
-        return dataTransform
-
-    ##
-    # Validates frequency match in weeks and object data types
-    # @dataset from loadSSBPriceData
-    # @return weekly dates as integers and prices as float
-    #
-    def SalmonPriceSSB(self):
-
-        _data         = self.loadSSBPriceData()
-        dataTransform = _data.astype({
-                         "Year"                    : "int64",
-                         "Week"                    : "int64",
-                         "Month"                   : "int64",
-                         "Exported_Tons_SSB_Weekly": "float64",
-                         "NOK_kg_SSB_Weekly"       : "float64"
-                         })
-        
-        return dataTransform
-    
-    ##
-    # Validates frequency match in weeks and object data types
-    # @dataset from loadEscapesData (event driven)
-    # @return weekly dates as integers and aggregates of observations per week
-    #
-    def Escapes(self):
-
-        _data         = self.loadEscapesData()
-        _data["Date"] = pd.to_datetime(_data["Date"])
-        _data         = _data.set_index("Date")
-        _data.loc[_data["Rep_Escaped"] == "E:10 - 100", "Rep_Escaped"] = "55"
-        _data["Rep_Escaped"] = (
-                                _data["Rep_Escaped"]
+        ## Transform
+        dataTransform = dataClean.copy()
+        dataTransform["Date"] = pd.to_datetime(dataTransform["Date"])
+        dataTransform         = dataTransform.set_index("Date")
+        dataTransform.loc[dataTransform["Salmon_Escapes_Rep_Escaped"] == "E:10 - 100", "Salmon_Escapes_Rep_Escaped"] = "55"
+        dataTransform["Salmon_Escapes_Rep_Escaped"] = (
+                                dataTransform["Salmon_Escapes_Rep_Escaped"]
                                 .astype(str)
                                 .fillna("0")
                                 .str.replace("E:", "", regex=False)
                                 )
-        _data["Rep_Escaped"] = pd.to_numeric(_data["Rep_Escaped"], errors="coerce")
-        dataTransform        = _data.resample("W-MON").agg({
-                              "Rep_Escaped" : "sum",
-                              "Avg_Wt_Grams": "mean",
-                              "Recapture"   : "sum"
+        dataTransform["Salmon_Escapes_Rep_Escaped"] = pd.to_numeric(dataTransform["Salmon_Escapes_Rep_Escaped"], errors="coerce")
+        dataTransform        = dataTransform.resample("W-MON").agg({
+                              "Salmon_Escapes_Rep_Escaped" : "sum",
+                              "Salmon_Escapes_Avg_Wt_Grams": "mean",
+                              "Salmon_Escapes_Recapture"   : "sum"
                               })
         
         dataTransform          = dataTransform.reset_index()
-        _colNames              = ["Date", "Rep_Escaped_DF_Weekly", "Avg_Wt_Grams_DF_Weekly", "Recapture_DF_Weekly" ]
+        _colNames              = ["Date", "Salmon_Escapes_Rep_Escaped_Weekly", "Salmon_Escapes_Avg_Wt_Grams_Weekly", "Salmon_Escapes_Recapture_Weekly" ]
         dataTransform.columns  = _colNames
         dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
         dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
@@ -354,76 +293,608 @@ class DataLoader:
                                  "Year": "int64",
                                  "Week": "int64",
                                  "Month": "int64",
-                                 "Rep_Escaped_DF_Weekly": "float64",
-                                 "Avg_Wt_Grams_DF_Weekly": "float64",
-                                 "Recapture_DF_Weekly": "float64"
+                                 "Salmon_Escapes_Rep_Escaped_Weekly" : "float64",
+                                 "Salmon_Escapes_Avg_Wt_Grams_Weekly": "float64",
+                                 "Salmon_Escapes_Recapture_Weekly"   : "float64"
         })
 
         return dataTransform
 
     ##
-    # Validates frequency match in months and object data types
-    # @dataset from loadBiomass (monthly)
-    # @return monthly dates as integers and aggregates of observations per week
+    #  Uploads, cleans and transforms the CPI time series data
+    #  From January 1932 to December 2025
+    #  @dataset SSB Norwegian CPI
+    #  @return Monthly or Annual CPI in percentage (%)
     #
-    def Biomass(self):
+    def CPINorway(self):
 
-        _data = self.loadBiomassData()
-        dataTransform = (
-                         _data
-                         .groupby(["Year", "Month"], as_index = False)
-                         .sum(numeric_only = True)
-        )
-        for col in dataTransform.columns:
-            if col not in ["Year", "Month"]:
-                dataTransform[col] = dataTransform[col].astype("float64")
+        ## Clean
+        _fileName      = self.CPI_NORWAY
+        _data          = pd.read_excel(_fileName)
+        _data          = _data[:-2]
+        _data          = _data.iloc[::-1]
 
-        _colRename = dataTransform.columns.difference(["Year", "Month"])
+        _dataM         = _data.drop(columns = "Årsgj.snitt2")
+        _months        = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"]
+        _dataM.columns = ["Year"] + _months
 
-        dataTransform = dataTransform.rename(
-            columns={col: col + "_DF_Monthly" for col in _colRename}
-        )
+        _years  = _dataM["Year"].values.tolist()
+        _dates  = []
+            
+        for i in _years:
+            for j in _months:
+                _dates.append(f"{i}-{j}-01")
+
+        _values = _dataM[_months].to_numpy().ravel().tolist()
+
+        _monthlyData = {"Date"       : _dates,
+                           "CPI_Norway_Monthly": _values}
+
+        dataClean         = pd.DataFrame(_monthlyData)
+        dataClean["Date"] = pd.to_datetime(dataClean["Date"], format = "%Y-%m-%d")
+
+        ## Transform
+        dataTransform          = dataClean.copy()
+        dataTransform["Year"]  = dataTransform["Date"].dt.year
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+        dataTransform  = dataTransform.drop(columns = ["Date"])
+        dataTransform  = dataTransform[["Year", "Month"] 
+                         + list(dataTransform.columns.drop(["Year", "Month"]))]
+        dataTransform  = dataTransform.astype({
+                        "Year"               : "int64",
+                        "Month"              : "int64",
+                        "CPI_Norway_Monthly" : "float64",
+                        })
+        
+        return dataTransform
+
+    ##
+    #  Uploads, cleans and transforms the CPI EU Meat time series data
+    #  From 31 January 2012 to 09 February 2026
+    #  @dataset from bloomberg ticker CP12EAYY, source Eurostat
+    #  @return  monthly  index of consumer prices based on meat
+    #
+    def ProteinCPIMeat(self):
+        
+        ## Clean
+        _fileName         = self.PROTEIN_CPI_MEAT
+        _data             = pd.read_excel(_fileName, header = 0)
+        dataClean         = _data.copy()
+        dataClean["Date"] = pd.to_datetime(dataClean["Date"], format = "%Y-%m-%d")
+        dataClean         = dataClean.sort_values("Date", ascending=True)
+        dataClean         = dataClean.rename(columns = {"Last Price" : "Protein_CPI_Meat_Monthly"})
+        dataClean         = dataClean.reset_index(drop = True)
+
+        ## Transform
+        dataTransform          = dataClean.copy()
+        dataTransform["Year"]  = dataTransform["Date"].dt.year
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+        dataTransform          = dataTransform.drop(columns = ["Date"])
+        dataTransform          = dataTransform[["Year", "Month"]
+                                       + list(dataTransform.columns.drop(["Year", "Month"]))]
+        dataTransform          = dataTransform.astype({
+                                "Year"                   : "int64",
+                                "Month"                  : "int64",
+                                "Protein_CPI_Meat_Monthly": "float64"
+                                })
 
         return dataTransform
     
-
-    ###
-    #   Merge everything
-    #   @datasets retrieved from various providers in weekly and monthly conventions
-    #   @return weekly observations per feature, containing full information
+    ##
+    #  Uploads, cleans and transforms the Broiler Price EU time series data
+    #  From 06 January 2012 to 09 February 2026
+    #  @dataset from bloomberg ticker POPRBREU, source European Comission
+    #  @return  weekly price in EUR per 100 kg
     #
+    def ProteinBroilerPrice(self):
+
+        ## Clean
+        _fileName         = self.PROTEIN_PRICE_BROILER
+        _data             = pd.read_excel(_fileName, header = 0)
+        dataClean         = _data.copy()
+        dataClean["Date"] = pd.to_datetime(dataClean["Date"], format = "%Y-%m-%d")
+        dataClean         = dataClean.sort_values("Date", ascending=True)
+        dataClean         = dataClean.rename(columns = {"Last Price" : "Protein_Broiler_EUR_100_kg_Weekly"})
+        dataClean         = dataClean.reset_index(drop = True)
+
+        ## Transform
+        dataTransform          = dataClean.copy()
+        dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
+        dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+        dataTransform          = dataTransform.drop(columns = ["Date"])
+        dataTransform          = dataTransform[["Year", "Week", "Month"]
+                                       + list(dataTransform.columns.drop(["Year", "Week", "Month"]))]
+        dataTransform          = dataTransform.astype({
+                                "Year"                             : "int64",
+                                "Week"                             : "int64",
+                                "Month"                            : "int64",
+                                "Protein_Broiler_EUR_100_kg_Weekly": "float64"
+                                })
+
+        return dataTransform
+    
+    ##
+    #  Uploads, cleans and transforms the Pig Price EU time series data
+    #  From 03 January 2014 to 27 February 2026
+    #  @dataset from bloomberg ticker EUPGCEDE, source European Comission
+    #  @return  weekly price in EUR per 100 kg
+    #
+    def ProteinPigPrice(self):
+
+        ## Clean
+        _fileName         = self.PROTEIN_PRICE_PIG
+        _data             = pd.read_excel(_fileName, header = 0)
+        dataClean         = _data.copy()
+        dataClean["Date"] = pd.to_datetime(dataClean["Date"], format = "%Y-%m-%d")
+        dataClean         = dataClean.sort_values("Date", ascending=True)
+        dataClean         = dataClean.rename(columns = {"Last Price" : "Protein_Pig_EUR_100_kg_Weekly"})
+        dataClean         = dataClean.reset_index(drop = True)
+
+        ## Transform
+        dataTransform          = dataClean.copy()
+        dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
+        dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+        dataTransform          = dataTransform.drop(columns = ["Date"])
+        dataTransform          = dataTransform[["Year", "Week", "Month"]
+                                       + list(dataTransform.columns.drop(["Year", "Week", "Month"]))]
+        dataTransform          = dataTransform.astype({
+                                "Year"                          : "int64",
+                                "Week"                          : "int64",
+                                "Month"                         : "int64",
+                                "Protein_Pig_EUR_100_kg_Weekly" : "float64"
+                                })
+
+        return dataTransform
+
+    ##
+    #  Uploads, cleans and transforms the EURNOK time series data
+    #  From 07 January 2000 to 05 March 2026
+    #  @dataset EURNOK Last price, source Bloomberg
+    #  @return weekly EURNOK last price
+    #
+    def EURNOK(self):
+
+        ## Clean
+        _fileName         = self.CURRENCY_EURNOK
+        _data             = pd.read_excel(_fileName, header = 0)
+        dataClean         = _data.copy()
+        dataClean["Date"] = pd.to_datetime(dataClean["Date"], format = "%Y-%m-%d")
+        dataClean         = dataClean.sort_values("Date", ascending=True)
+        dataClean         = dataClean.rename(columns = {"Last Price" : "EURNOK_Weekly"})
+        dataClean         = dataClean.reset_index(drop = True)
+
+        ## Transform
+        dataTransform          = dataClean.copy()
+        dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
+        dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+        dataTransform          = dataTransform.drop(columns = ["Date"])
+        dataTransform          = dataTransform[["Year", "Week", "Month"]
+                                       + list(dataTransform.columns.drop(["Year", "Week", "Month"]))]
+        dataTransform          = dataTransform.astype({
+                                "Year"          : "int64",
+                                "Week"          : "int64",
+                                "Month"         : "int64",
+                                "EURNOK_Weekly" : "float64"
+                                })
+
+        return dataTransform
+
+    ##
+    #  Uploads, cleans and transforms the USDNOK time series data
+    #  From 07 January 2000 to 05 March 2026
+    #  @dataset USDNOK Last price, source Bloomberg
+    #  @return weekly USDNOK last price
+    #
+    def USDNOK(self):
+        
+        ## Clean
+        _fileName         = self.CURRENCY_USDNOK
+        _data             = pd.read_excel(_fileName, header = 0)
+        dataClean         = _data.copy()
+        dataClean["Date"] = pd.to_datetime(dataClean["Date"], format = "%Y-%m-%d")
+        dataClean         = dataClean.sort_values("Date", ascending=True)
+        dataClean         = dataClean.rename(columns = {"Last Price" : "USDNOK_Weekly"})
+        dataClean         = dataClean.reset_index(drop = True)
+
+        ## Transform
+        dataTransform          = dataClean.copy()
+        dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
+        dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+        dataTransform          = dataTransform.drop(columns = ["Date"])
+        dataTransform          = dataTransform[["Year", "Week", "Month"]
+                                       + list(dataTransform.columns.drop(["Year", "Week", "Month"]))]
+        dataTransform          = dataTransform.astype({
+                                "Year"          : "int64",
+                                "Week"          : "int64",
+                                "Month"         : "int64",
+                                "USDNOK_Weekly" : "float64"
+                                })
+
+        return dataTransform
+    
+    ##
+    #  Uploads, cleans and transforms the Brent time series data
+    #  From 07 January 2000 to 05 March 2026
+    #  @dataset Bloomberg ticker CO1, source ICE
+    #  @return weekly Brent last price per barrel in NOK
+    #
+    def CommodityBrentPrice(self):
+        
+        ## Clean
+        _fileName         = self.COMMODITY_BRENT
+        _data             = pd.read_excel(_fileName, header = 0)
+        dataClean         = _data.copy()
+        dataClean["Date"] = pd.to_datetime(dataClean["Date"], format = "%Y-%m-%d")
+        dataClean         = dataClean.sort_values("Date", ascending=True)
+        dataClean         = dataClean.rename(columns = {"Last Price" : "Commodity_Brent_NOK_bbl_Weekly"})
+        dataClean         = dataClean.reset_index(drop = True)
+
+        ## Transform
+        dataTransform          = dataClean.copy()
+        dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
+        dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+        dataTransform          = dataTransform.drop(columns = ["Date"])
+        dataTransform          = dataTransform[["Year", "Week", "Month"]
+                                       + list(dataTransform.columns.drop(["Year", "Week", "Month"]))]
+        dataTransform          = dataTransform.astype({
+                                "Year"                           : "int64",
+                                "Week"                           : "int64",
+                                "Month"                          : "int64",
+                                "Commodity_Brent_NOK_bbl_Weekly" : "float64"
+                                })
+
+        return dataTransform
+
+    ##
+    #  Uploads, cleans and transforms the Wheat time series data
+    #  From 07 January 2000 to 05 March 2026
+    #  @dataset Bloomberg ticker CA2, source EOP-Euronext Derivatives
+    #  @return weekly wheat last price per metric tone in NOK
+    #
+    def CommodityWheatPrice(self):
+
+        ## Clean
+        _fileName         = self.COMMODITY_WHEAT
+        _data             = pd.read_excel(_fileName, header = 0)
+        dataClean         = _data.copy()
+        dataClean["Date"] = pd.to_datetime(dataClean["Date"], format = "%Y-%m-%d")
+        dataClean         = dataClean.sort_values("Date", ascending=True)
+        dataClean         = dataClean.rename(columns = {"Last Price" : "Commodity_Wheat_NOK_mt_Weekly"})
+        dataClean         = dataClean.reset_index(drop = True)
+
+        ## Transform
+        dataTransform          = dataClean.copy()
+        dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
+        dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+        dataTransform          = dataTransform.drop(columns = ["Date"])
+        dataTransform          = dataTransform[["Year", "Week", "Month"]
+                                       + list(dataTransform.columns.drop(["Year", "Week", "Month"]))]
+        dataTransform          = dataTransform.astype({
+                                "Year"                          : "int64",
+                                "Week"                          : "int64",
+                                "Month"                         : "int64",
+                                "Commodity_Wheat_NOK_mt_Weekly" : "float64"
+                                })
+
+        return dataTransform
+
+    ##
+    #  Uploads, cleans and transforms the Soybean time series data
+    #  From 07 January 2000 to 05 March 2026
+    #  @dataset Bloomberg ticker SM1, source CBOT
+    #  @return weekly soybean last price per short ton in NOK
+    #
+    def CommoditySoybeanPrice(self):
+        
+        ## Clean
+        _fileName         = self.COMMODITY_SOYBEAN
+        _data             = pd.read_excel(_fileName, header = 0)
+        dataClean         = _data.copy()
+        dataClean["Date"] = pd.to_datetime(dataClean["Date"], format = "%Y-%m-%d")
+        dataClean         = dataClean.sort_values("Date", ascending=True)
+        dataClean         = dataClean.rename(columns = {"Last Price" : "Commodity_Soybean_NOK_st_Weekly"})
+        dataClean         = dataClean.reset_index(drop = True)
+        
+        ## Transform
+        dataTransform          = dataClean.copy()
+        dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
+        dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+        dataTransform          = dataTransform.drop(columns = ["Date"])
+        dataTransform          = dataTransform[["Year", "Week", "Month"]
+                                       + list(dataTransform.columns.drop(["Year", "Week", "Month"]))]
+        dataTransform          = dataTransform.astype({
+                                "Year"                          : "int64",
+                                "Week"                          : "int64",
+                                "Month"                         : "int64",
+                                "Commodity_Soybean_NOK_st_Weekly" : "float64"
+                                })
+
+        return dataTransform
+    
+    ##
+    #  Uploads, cleans and transforms the Rapseed time series data
+    #  From 07 January 2000 to 05 March 2026
+    #  @dataset Bloomberg ticker IJ1, source EOP-Euronext Derivatives
+    #  @return weekly rapseed last price per metric ton in NOK
+    #
+    def CommodityRapseedPrice(self):
+        
+        ## Clean
+        _fileName         = self.COMMODITY_RAPSEED
+        _data             = pd.read_excel(_fileName, header = 0)
+        dataClean         = _data.copy()
+        dataClean["Date"] = pd.to_datetime(dataClean["Date"], format = "%Y-%m-%d")
+        dataClean         = dataClean.sort_values("Date", ascending=True)
+        dataClean         = dataClean.rename(columns = {"Last Price" : "Commodity_Rapseed_NOK_mt_Weekly"})
+        dataClean         = dataClean.reset_index(drop = True)
+
+        ## Transform
+        dataTransform          = dataClean.copy()
+        dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
+        dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+        dataTransform          = dataTransform.drop(columns = ["Date"])
+        dataTransform          = dataTransform[["Year", "Week", "Month"]
+                                       + list(dataTransform.columns.drop(["Year", "Week", "Month"]))]
+        dataTransform          = dataTransform.astype({
+                                "Year"                          : "int64",
+                                "Week"                          : "int64",
+                                "Month"                         : "int64",
+                                "Commodity_Rapseed_NOK_mt_Weekly" : "float64"
+                                })
+
+        return dataTransform
+
+    ##
+    #  Uploads, cleans and transforms the MOWI time series data
+    #  From 07 January 2000 to 05 March 2026
+    #  @dataset Bloomberg ticker MOWI, source Bloomberg
+    #  @return weekly MOWI last price in NOK
+    #
+    def EquityMOWIPrice(self):
+
+        ## Clean
+        _fileName         = self.EQUITY_PRICE_MOWI
+        _data             = pd.read_excel(_fileName, header = 0)
+        dataClean         = _data.copy()
+        dataClean["Date"] = pd.to_datetime(dataClean["Date"], format = "%Y-%m-%d")
+        dataClean         = dataClean.sort_values("Date", ascending=True)
+        dataClean         = dataClean.rename(columns = {"Last Price" : "Equity_MOWI_NOK_Weekly"})
+        dataClean         = dataClean.reset_index(drop = True)
+
+        ## Transform
+        dataTransform          = dataClean.copy()
+        dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
+        dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+        dataTransform          = dataTransform.drop(columns = ["Date"])
+        dataTransform          = dataTransform[["Year", "Week", "Month"]
+                                       + list(dataTransform.columns.drop(["Year", "Week", "Month"]))]
+        dataTransform          = dataTransform.astype({
+                                "Year"                   : "int64",
+                                "Week"                   : "int64",
+                                "Month"                  : "int64",
+                                "Equity_MOWI_NOK_Weekly" : "float64"
+                                })
+
+        return dataTransform
+
+    ##
+    #  Uploads, cleans and transforms the SALMAR time series data
+    #  From 07 January 2007 to 05 March 2026
+    #  @dataset Bloomberg ticker SALMAR, source EOP-Euronext Derivatives
+    #  @return weekly SALMAR last price in NOK
+    #
+    def EquitySALMARPrice(self):
+
+        ## Clean
+        _fileName         = self.EQUITY_PRICE_SALMAR
+        _data             = pd.read_excel(_fileName, header = 0)
+        dataClean         = _data.copy()
+        dataClean["Date"] = pd.to_datetime(dataClean["Date"], format = "%Y-%m-%d")
+        dataClean         = dataClean.sort_values("Date", ascending=True)
+        dataClean         = dataClean.rename(columns = {"Last Price" : "Equity_SALMAR_NOK_Weekly"})
+        dataClean         = dataClean.reset_index(drop = True)
+
+        ## Transform
+        dataTransform          = dataClean.copy()
+        dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
+        dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+        dataTransform          = dataTransform.drop(columns = ["Date"])
+        dataTransform          = dataTransform[["Year", "Week", "Month"]
+                                       + list(dataTransform.columns.drop(["Year", "Week", "Month"]))]
+        dataTransform          = dataTransform.astype({
+                                "Year"                     : "int64",
+                                "Week"                     : "int64",
+                                "Month"                    : "int64",
+                                "Equity_SALMAR_NOK_Weekly" : "float64"
+                                })
+
+        return dataTransform
+
+
+    ###                                                                             ##
+    #   Merge everything                                                             #
+    #   @datasets retrieved from various providers in weekly and monthly conventions #
+    #   @return weekly observations per feature, containing full information         #
+    #                                                                                #
     def Data(self):
-        _data      = self.SalmonPriceFP()
-        _cpi       = self.Cpi()
-        _eurnok    = self.Eurnok()
-        _salmon    = self.SalmonPriceSSB()
-        _escapes   = self.Escapes()
-        _biomass   = self.Biomass()
 
-        data       = _data.copy()
+        _data        = self.SalmonPriceFishPool()
 
-        assert not _salmon.duplicated(["Year","Week"]).any()
-        assert not _eurnok.duplicated(["Year","Week"]).any()
-        assert not _escapes.duplicated(["Year","Week"]).any()
+        _salmonsb    = self.SalmonPriceSSB()
+        _salmonbb    = self.SalmonPriceBloomberg()
+        _escapes     = self.SalmonEscapes()
+
+        _broiler     = self.ProteinBroilerPrice()
+        _pig         = self.ProteinPigPrice()
+
+        _eurnok      = self.EURNOK()
+        _usdnok      = self.USDNOK()
+
+        _brent       = self.CommodityBrentPrice()
+        _wheat       = self.CommodityWheatPrice()
+        _soybean     = self.CommoditySoybeanPrice()
+        _rapseed     = self.CommodityRapseedPrice()
+
+        _mowi        = self.EquityMOWIPrice()
+        _salmar      = self.EquitySALMARPrice()
+
+        _cpi         = self.CPINorway()
+        _cpimeat     = self.ProteinCPIMeat()
+        _biomass     = self.SalmonBiomass()
+        _exports     = self.SalmonExport()
+
+        data = _data.copy()
 
         # Weekly merges
-        for w in [_salmon, _eurnok, _escapes]:
-            w    = w.drop(columns=["Month"], errors="ignore")
-            data = data.merge(w, on=["Year", "Week"], how="left", validate="one_to_one")
+        for w in [
+            _salmonsb, _salmonbb, _escapes,
+            _broiler, _pig,
+            _eurnok, _usdnok,
+            _brent, _wheat, _soybean, _rapseed,
+            _mowi, _salmar
+        ]:
+            w = w.drop(columns=["Month"], errors="ignore")
+            data = data.merge(
+                w,
+                on=["Year", "Week"],
+                how="left",
+                validate="one_to_one"
+            )
 
         # Monthly merges
-        for m in [_cpi, _biomass]:
-            data = data.merge(m, on=["Year", "Month"], how="left")
-        
-        data = data.iloc[1:-3].reset_index(drop = True)
+        for m in [_cpi, _cpimeat, _biomass, _exports]:
+
+            m = m.groupby(["Year","Month"], as_index=False).first()
+
+            data = data.merge(
+                m,
+                on=["Year","Month"],
+                how="left",
+                validate="many_to_one"
+            )
+
+        # Sort and reset index
+        data = data.sort_values(["Year", "Week"]).reset_index(drop=True)
+
+        # Time index
         data.insert(0, "t", range(len(data)))
+
+        # Weekly date
         data.insert(
             0,
             "Date",
             pd.to_datetime(
-                data["Year"].astype(str) + "-W" + data["Week"].astype(str).str.zfill(2) + "-1",
+                data["Year"].astype(str)
+                + "-W"
+                + data["Week"].astype(str).str.zfill(2)
+                + "-1",
                 format="%G-W%V-%u"
             ).dt.to_period("W")
         )
-        
+
+        # Ensure dataset length matches FishPool base
+        assert len(data) == len(_data)
+
         return data
+    
+
+    ##
+    #   Validates merged dataset integrity and data quality
+    #   @param data dataframe returned by Data()
+    #   @return diagnostic output and validation assertions
+    #
+    def ValidateData(self, data):
+
+        ## Structural checks
+        print("\n--- DATASET STRUCTURE ---")
+        print("Rows   :", len(data))
+        print("Cols   :", len(data.columns))
+
+        assert "Year" in data.columns
+        assert "Week" in data.columns
+        assert "Month" in data.columns
+        assert "Date" in data.columns
+
+        ## Time ordering
+        print("\n--- TIME ORDER CHECK ---")
+
+        assert data["Date"].is_monotonic_increasing
+        print("Date ordering: OK")
+
+        ## Key uniqueness
+        print("\n--- KEY UNIQUENESS ---")
+
+        _dupYW = data.duplicated(["Year","Week"]).sum()
+        _dupD  = data["Date"].duplicated().sum()
+
+        print("Duplicate Year-Week :", _dupYW)
+        print("Duplicate Date      :", _dupD)
+
+        assert _dupYW == 0
+        assert _dupD  == 0
+
+        ## Missing values
+        print("\n--- MISSING VALUES (%) ---")
+
+        _missing = (data.isna().mean()*100).sort_values(ascending=False)
+
+        print(_missing[_missing > 0].head(20))
+
+        ## Monthly merge consistency
+        print("\n--- MONTHLY MERGE CONSISTENCY ---")
+
+        _monthlyCols = data.filter(like="_Monthly").columns
+
+        if len(_monthlyCols) > 0:
+
+            _check = data.groupby(["Year","Month"])[_monthlyCols].nunique()
+
+            _max = _check.max().max()
+
+            print("Max unique values per month:", _max)
+
+            assert _max <= 1
+
+            print("Monthly merge consistency: OK")
+
+        ## Numeric summary
+        print("\n--- NUMERIC SUMMARY ---")
+
+        _numeric = data.select_dtypes(include="number")
+
+        print(_numeric.describe().T.head(10))
+
+        ## Extreme values
+        print("\n--- EXTREME VALUE CHECK ---")
+
+        _extreme = (_numeric.abs() > 1e6).sum()
+
+        print(_extreme[_extreme > 0])
+
+        ## Time continuity
+        print("\n--- WEEK CONTINUITY ---")
+
+        _weekDiff = data["Date"].diff().dropna()
+
+        print(_weekDiff.value_counts().head())
+
+        ## Column duplication
+        print("\n--- COLUMN DUPLICATION ---")
+
+        _dupCols = data.columns[data.columns.duplicated()]
+
+        print("Duplicate columns:", list(_dupCols))
+
+        assert len(_dupCols) == 0
+
+        print("\nDATA VALIDATION PASSED")
