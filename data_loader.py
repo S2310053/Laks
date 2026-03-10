@@ -172,6 +172,8 @@ class DataLoader:
                                 "Salmon_Export_Avg_Price_USD_Kg_Monthly": "float64"
                                 })
 
+        dataTransform = dataTransform.drop_duplicates(subset=["Year", "Month"]).reset_index(drop=True)
+
         return dataTransform
 
     ##
@@ -219,6 +221,64 @@ class DataLoader:
         return dataTransform
 
     ##
+    #  Uploads, cleans and transforms the Biomass data by age cohort
+    #  From January 2000 to January 2026
+    #  @dataset Directory of fisheries detailed biomass data
+    #  @return  monthly national biomass and fish stock stratified by
+    #           fish age (0, 1, 2+) derived from observation year - release year
+    #
+    def SalmonBiomassCohort(self):
+
+        ## Clean
+        _fileName = self.SALMON_BIOMASS
+        _data     = pd.read_excel(_fileName, sheet_name="Biomasse-flk", skiprows=5)
+        _data     = _data[_data[" ARTSID"] == "LAKS"].copy()
+        _data     = _data.reset_index(drop=True)
+
+        ## Compute fish age and bucket
+        _data["Age"] = _data["ÅR"] - _data[" UTSETTSÅR"]
+        _data        = _data[_data["Age"] >= 0]
+        _data["AgeBucket"] = _data["Age"].clip(upper=2).astype(int)
+
+        ## Aggregate: sum across counties per (Year, Month, AgeBucket)
+        _agg = (
+            _data
+            .groupby(["ÅR", " MÅNED_KODE", "AgeBucket"], as_index=False)
+            .agg({" BEHFISK_STK": "sum", " BIOMASSE_KG": "sum"})
+        )
+
+        _agg.columns = ["Year", "Month", "AgeBucket", "Fish_Stock", "Biomass_Kg"]
+
+        ## Pivot age buckets into columns
+        _ageLabels = {0: "Age0", 1: "Age1", 2: "Age2Plus"}
+        _agg["AgeBucket"] = _agg["AgeBucket"].map(_ageLabels)
+
+        dataTransform = _agg.pivot_table(
+            index=["Year", "Month"],
+            columns="AgeBucket",
+            values=["Biomass_Kg", "Fish_Stock"],
+            aggfunc="sum",
+            fill_value=0
+        )
+
+        ## Flatten column names
+        dataTransform.columns = [
+            f"Salmon_Biomass_{val}_{age}_Monthly"
+            for val, age in dataTransform.columns
+        ]
+
+        dataTransform = dataTransform.reset_index()
+        dataTransform = dataTransform.astype({
+            "Year": "int64", "Month": "int64"
+        })
+
+        for col in dataTransform.columns:
+            if col not in ["Year", "Month"]:
+                dataTransform[col] = dataTransform[col].astype("float64")
+
+        return dataTransform
+
+    ##
     #  Uploads, cleans and transforms the Escapes time series data
     #  From week 12 January 2006 to 19 January 2026
     #  @dataset Directory of fisheries reported escapes per species
@@ -252,18 +312,40 @@ class DataLoader:
         dataTransform["Salmon_Escapes_Rep_Escaped"] = (
                                 dataTransform["Salmon_Escapes_Rep_Escaped"]
                                 .astype(str)
-                                .fillna("0")
                                 .str.replace("E:", "", regex=False)
                                 )
         dataTransform["Salmon_Escapes_Rep_Escaped"] = pd.to_numeric(dataTransform["Salmon_Escapes_Rep_Escaped"], errors="coerce")
+        dataTransform["Salmon_Escapes_Avg_Wt_Grams"] = pd.to_numeric(dataTransform["Salmon_Escapes_Avg_Wt_Grams"], errors="coerce")
+
+        ## Weighted average weight: weight each event's avg_wt by its escaped count
+        ## Exclude events with missing weight so they don't inflate the denominator
+        _hasWt = dataTransform["Salmon_Escapes_Avg_Wt_Grams"].notna()
+        dataTransform["_rep_with_wt"] = dataTransform["Salmon_Escapes_Rep_Escaped"].where(_hasWt, 0)
+        dataTransform["_wt_x_escaped"] = (
+            dataTransform["Salmon_Escapes_Avg_Wt_Grams"] * dataTransform["Salmon_Escapes_Rep_Escaped"]
+        )
+
         dataTransform        = dataTransform.resample("W-WED").agg({
                               "Salmon_Escapes_Rep_Escaped" : "sum",
-                              "Salmon_Escapes_Avg_Wt_Grams": "mean",
+                              "_rep_with_wt"               : "sum",
+                              "_wt_x_escaped"              : "sum",
                               "Salmon_Escapes_Recapture"   : "sum"
                               })
+
+        dataTransform["Salmon_Escapes_Avg_Wt_Grams"] = (
+            dataTransform["_wt_x_escaped"] / dataTransform["_rep_with_wt"]
+        )
+        dataTransform = dataTransform.drop(columns=["_wt_x_escaped", "_rep_with_wt"])
         
+        dataTransform["Salmon_Escapes_Rep_Escaped"] = (
+            dataTransform["Salmon_Escapes_Rep_Escaped"].fillna(0)
+        )
+        dataTransform["Salmon_Escapes_Recapture"] = (
+            dataTransform["Salmon_Escapes_Recapture"].fillna(0)
+        )
+
         dataTransform          = dataTransform.reset_index()
-        _colNames              = ["Date", "Salmon_Escapes_Rep_Escaped_Weekly", "Salmon_Escapes_Avg_Wt_Grams_Weekly", "Salmon_Escapes_Recapture_Weekly" ]
+        _colNames              = ["Date", "Salmon_Escapes_Rep_Escaped_Weekly", "Salmon_Escapes_Recapture_Weekly", "Salmon_Escapes_Avg_Wt_Grams_Weekly"]
         dataTransform.columns  = _colNames
         dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
         dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
@@ -334,7 +416,7 @@ class DataLoader:
     #  Uploads, cleans and transforms the CPI EU Meat time series data
     #  From 31 January 2012 to 09 February 2026
     #  @dataset from bloomberg ticker CP12EAYY, source Eurostat
-    #  @return  monthly  index of consumer prices based on meat
+    #  @return  monthly  year-over-year % change in EU meat prices
     #
     def ProteinCPIMeat(self):
         
@@ -344,7 +426,7 @@ class DataLoader:
         dataClean         = _data.copy()
         dataClean["Date"] = pd.to_datetime(dataClean["Date"], format = "%Y-%m-%d")
         dataClean         = dataClean.sort_values("Date", ascending=True)
-        dataClean         = dataClean.rename(columns = {"Last Price" : "Protein_CPI_Meat_Monthly"})
+        dataClean         = dataClean.rename(columns = {"Last Price" : "Protein_Meat_Inflation_YoY_Monthly"})
         dataClean         = dataClean.reset_index(drop = True)
 
         ## Transform
@@ -357,7 +439,7 @@ class DataLoader:
         dataTransform          = dataTransform.astype({
                                 "Year"                   : "int64",
                                 "Month"                  : "int64",
-                                "Protein_CPI_Meat_Monthly": "float64"
+                                "Protein_Meat_Inflation_YoY_Monthly": "float64"
                                 })
 
         return dataTransform
@@ -396,7 +478,7 @@ class DataLoader:
     #
     def EURNOK(self):
 
-     return self._loadWeekly(
+        return self._loadWeekly(
                             self.CURRENCY_EURNOK,
                             "EURNOK_Weekly", freq = "weekly"
                             )
@@ -565,8 +647,8 @@ class DataLoader:
 
             dataClean = dataClean.rename(columns={"Last Price": columnCurrent})
 
-            ## Transform
-            if freq == "daily":
+            ## Transform: align to weekly Wednesday
+            if freq in ("daily", "weekly"):
 
                 dataTransform = (
                     dataClean
@@ -575,16 +657,6 @@ class DataLoader:
                     .last()
                     .reset_index()
                 )
-
-            elif freq == "weekly":
-
-                dataTransform = (
-                                    dataClean
-                                    .set_index("Date")
-                                    .resample("W-WED")
-                                    .last()
-                                    .reset_index()
-                                )
 
             elif freq == "monthly":
 
@@ -663,6 +735,7 @@ class DataLoader:
         _cpi         = self.CPINorway()
         _cpimeat     = self.ProteinCPIMeat()
         _biomass     = self.SalmonBiomass()
+        _biomassCoh  = self.SalmonBiomassCohort()
         _exports     = self.SalmonExport()
 
         ## Create Date from FishPool (Wednesday of ISO week)
@@ -690,14 +763,15 @@ class DataLoader:
             "Date": pd.date_range(start=start, end=end, freq="W-WED")
         })
 
-        calendar["Year"]  = calendar["Date"].dt.isocalendar().year
-        calendar["Week"]  = calendar["Date"].dt.isocalendar().week
-        calendar["Month"] = calendar["Date"].dt.month
+        calendar["Year"]         = calendar["Date"].dt.isocalendar().year
+        calendar["Week"]         = calendar["Date"].dt.isocalendar().week
+        calendar["Month"]        = calendar["Date"].dt.month
+        calendar["CalendarYear"] = calendar["Date"].dt.year
 
         ## Base dataset
         data = calendar.merge(
-            _data.drop(columns=["Date"], errors="ignore"),
-            on=["Year","Week","Month"],
+            _data.drop(columns=["Year","Week","Month"], errors="ignore"),
+            on="Date",
             how="left"
         )
 
@@ -728,42 +802,40 @@ class DataLoader:
                 how="left"
             )
 
-        ## Monthly merges
-        for m in [_cpi, _cpimeat, _biomass, _exports]:
+        ## Monthly merges (use calendar year, not ISO year)
+        for m in [_cpi, _cpimeat, _biomass, _biomassCoh, _exports]:
 
             m = m.groupby(["Year","Month"], as_index=False).first()
+            m = m.rename(columns={"Year": "CalendarYear"})
 
             data = data.merge(
                 m,
-                on=["Year","Month"],
+                on=["CalendarYear","Month"],
                 how="left",
                 validate="many_to_one"
             )
 
-        ## Sort dataset
+        ## Sort dataset and drop helper column
+        data = data.drop(columns=["CalendarYear"])
         data = data.sort_values("Date").reset_index(drop=True)
 
-        ## Forwards fill only market variables
+        ## Forwards fill only market price variables (not target, not volumes)
         _fillCols = data.columns[
             data.columns.str.contains(
-                "Weekly|Commodity|Equity|EURNOK|USDNOK|Salmon_NOK_kg"
+                "Commodity|Equity|EURNOK|USDNOK|Protein_Broiler|Protein_Pig"
             )
         ]
 
-        ## Exclude biomass and escapes
-        _fillCols = _fillCols[
-            ~_fillCols.str.contains("Biomass|Escapes")
-        ]
-
-        data[_fillCols] = data[_fillCols].ffill()
-
-        ## Time index
-        data.insert(0, "t", range(len(data)))
+        data[_fillCols] = data[_fillCols].ffill(limit=2)
 
         ## Cut dataset
         _cutoff = pd.Timestamp("2025-12-31")
 
         data = data[data["Date"] <= _cutoff]
+
+        ## Time index (after cut to ensure sequential values)
+        data = data.reset_index(drop=True)
+        data.insert(0, "t", range(len(data)))
 
         return data
     
@@ -786,76 +858,58 @@ class DataLoader:
 
         ## Time ordering
         print("\n--- TIME ORDER CHECK ---")
-
         assert data["Date"].is_monotonic_increasing
         print("Date ordering: OK")
 
-        ## Key uniqueness
+        ## Key uniqueness (Date is the true key)
         print("\n--- KEY UNIQUENESS ---")
-
-        _dupYW = data.duplicated(["Year","Week"]).sum()
-        _dupD  = data["Date"].duplicated().sum()
-
-        print("Duplicate Year-Week :", _dupYW)
-        print("Duplicate Date      :", _dupD)
-
-        assert _dupYW == 0
-        assert _dupD  == 0
+        _dupD = data["Date"].duplicated().sum()
+        print("Duplicate Date :", _dupD)
+        assert _dupD == 0
 
         ## Missing values
         print("\n--- MISSING VALUES (%) ---")
-
-        _missing = (data.isna().mean()*100).sort_values(ascending=False)
-
+        _missing = (data.isna().mean() * 100).sort_values(ascending=False)
         print(_missing[_missing > 0].head(20))
 
         ## Monthly merge consistency
         print("\n--- MONTHLY MERGE CONSISTENCY ---")
-
         _monthlyCols = data.filter(like="_Monthly").columns
 
         if len(_monthlyCols) > 0:
-
-            _check = data.groupby(["Year","Month"])[_monthlyCols].nunique()
-
+            _calYear = data["Date"].dt.year
+            _check = data.groupby([_calYear, "Month"])[_monthlyCols].nunique()
             _max = _check.max().max()
-
             print("Max unique values per month:", _max)
-
             assert _max <= 1
-
             print("Monthly merge consistency: OK")
 
         ## Numeric summary
         print("\n--- NUMERIC SUMMARY ---")
-
         _numeric = data.select_dtypes(include="number")
-
         print(_numeric.describe().T.head(10))
 
-        ## Extreme values
-        print("\n--- EXTREME VALUE CHECK ---")
-
-        _extreme = (_numeric.abs() > 1e6).sum()
-
-        print(_extreme[_extreme > 0])
+        ## Forward-fill staleness check
+        print("\n--- FORWARD-FILL STALENESS ---")
+        _fillCols = data.columns[
+            data.columns.str.contains("Commodity|Equity|EURNOK|USDNOK|Protein_Broiler|Protein_Pig")
+        ]
+        for col in _fillCols:
+            _maxRun = (data[col] == data[col].shift()).astype(int)
+            _maxRun = _maxRun.groupby((_maxRun != _maxRun.shift()).cumsum()).sum().max()
+            if _maxRun > 10:
+                print(f"  WARNING: {col} has {_maxRun} consecutive identical values (possible stale fill)")
 
         ## Time continuity
         print("\n--- WEEK CONTINUITY ---")
-
         _weekDiff = data["Date"].diff().dropna()
-
         assert (_weekDiff == pd.Timedelta(days=7)).all()
-
-        print(_weekDiff.value_counts().head())
+        print("Week continuity: OK")
 
         ## Column duplication
         print("\n--- COLUMN DUPLICATION ---")
-
         _dupCols = data.columns[data.columns.duplicated()]
-
         print("Duplicate columns:", list(_dupCols))
-
         assert len(_dupCols) == 0
 
         print("\nDATA VALIDATION PASSED")
