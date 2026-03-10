@@ -41,6 +41,9 @@ class DataLoader:
     COMMODITY_SOYBEAN      = _commodity + "Price_Soybean.xlsx"
     COMMODITY_RAPSEED      = _commodity + "Price_Rapseed.xlsx"
 
+    ##
+    COMMODITY_CARBON       = _commodity + "Price_Carbon.xlsx"
+
     EQUITY_PRICE_MOWI      = _salmon + _salmonEquity + "Price_MOWI.xlsx"
     EQUITY_PRICE_SALMAR    = _salmon + _salmonEquity + "Price_SALMAR.xlsx"
 
@@ -129,12 +132,12 @@ class DataLoader:
     #  @dataset from bloomberg ticker NOSMFSVL, exports fresh price, source SSB
     #  @return weekly exported salmon price per kilogram in NOK
     #
-    def SalmonPriceBloomberg(self):
+    #def SalmonPriceBloomberg(self):
 
-        return self._loadWeekly(
-                                self.SALMON_PRICE_BLOOMBERG,
-                                "Salmon_NOK_kg_BB_Weekly"
-                                )
+        #return self._loadWeekly(
+        #                        self.SALMON_PRICE_BLOOMBERG,
+         #                       "Salmon_NOK_kg_BB_Weekly"
+          #                      )
 
     ##
     #  Uploads, cleans and transforms the salmon export  time series data
@@ -253,7 +256,7 @@ class DataLoader:
                                 .str.replace("E:", "", regex=False)
                                 )
         dataTransform["Salmon_Escapes_Rep_Escaped"] = pd.to_numeric(dataTransform["Salmon_Escapes_Rep_Escaped"], errors="coerce")
-        dataTransform        = dataTransform.resample("W-MON").agg({
+        dataTransform        = dataTransform.resample("W-WED").agg({
                               "Salmon_Escapes_Rep_Escaped" : "sum",
                               "Salmon_Escapes_Avg_Wt_Grams": "mean",
                               "Salmon_Escapes_Recapture"   : "sum"
@@ -369,7 +372,7 @@ class DataLoader:
 
         return self._loadWeekly(
             self.PROTEIN_PRICE_BROILER,
-            "Protein_Broiler_EUR_100_kg_Weekly"
+            "Protein_Broiler_EUR_100_kg_Weekly", freq="weekly"
         )
     
     ##
@@ -382,7 +385,7 @@ class DataLoader:
 
         return self._loadWeekly(
             self.PROTEIN_PRICE_PIG,
-            "Protein_Pig_EUR_100_kg_Weekly"
+            "Protein_Pig_EUR_100_kg_Weekly", freq = "weekly"
         )
 
     ##
@@ -395,7 +398,7 @@ class DataLoader:
 
      return self._loadWeekly(
                             self.CURRENCY_EURNOK,
-                            "EURNOK_Weekly"
+                            "EURNOK_Weekly", freq = "weekly"
                             )
 
     ##
@@ -408,39 +411,53 @@ class DataLoader:
 
         return self._loadWeekly(
                                 self.CURRENCY_USDNOK,
-                                "USDNOK_Weekly"
+                                "USDNOK_Weekly", freq = "weekly"
                                )
     
     
     ##
     #  Uploads, cleans and transforms the Brent time series data
-    #  From 07 January 2000 to 05 March 2026
+    #  From 07 January 2000 to 05 March 2026 ****
     #  @dataset Bloomberg ticker CO1, source ICE
-    #  @return weekly Brent last price per barrel in NOK
+    #  @return weekkly Brent last price per barrel in NOK
     #
     def CommodityBrentPrice(self):
         
         return self._loadWeekly(
             self.COMMODITY_BRENT,
-            "Commodity_Brent_NOK_bbl_Weekly"
+            ["Commodity_Brent_COA_NOK_bbl_Weekly",
+            "Commodity_Brent_CO1_NOK_bbl_Weekly",
+            "Commodity_Brent_CO2_NOK_bbl_Weekly",
+            "Commodity_Brent_CO3_NOK_bbl_Weekly",
+            "Commodity_Brent_CO4_NOK_bbl_Weekly",
+            "Commodity_Brent_CO5_NOK_bbl_Weekly",
+            "Commodity_Brent_CO6_NOK_bbl_Weekly"], freq= "daily"
+
         )
 
     ##
     #  Uploads, cleans and transforms the Wheat time series data
-    #  From 07 January 2000 to 05 March 2026
+    #  From 07 January 2000 to 05 March 2026 ***
     #  @dataset Bloomberg ticker CA2, source EOP-Euronext Derivatives
-    #  @return weekly wheat last price per metric tone in NOK
+    #  @return daily wheat last price per metric tone in NOK
     #
     def CommodityWheatPrice(self):
 
         return self._loadWeekly(
             self.COMMODITY_WHEAT,
-            "Commodity_Wheat_NOK_mt_Weekly"
+            ["Commodity_Wheat_CAA_NOK_mt_Weekly",
+            "Commodity_Wheat_CA1_NOK_mt_Weekly",
+            "Commodity_Wheat_CA2_NOK_mt_Weekly",
+            "Commodity_Wheat_CA3_NOK_mt_Weekly",
+            "Commodity_Wheat_CA4_NOK_mt_Weekly",
+            "Commodity_Wheat_CA5_NOK_mt_Weekly",
+            "Commodity_Wheat_CA6_NOK_mt_Weekly"], freq= "daily"
+
         )
 
     ##
     #  Uploads, cleans and transforms the Soybean time series data
-    #  From 07 January 2000 to 05 March 2026
+    #  From 07 January 2000 to 05 March 2026 *****
     #  @dataset Bloomberg ticker SM1, source CBOT
     #  @return weekly soybean last price per short ton in NOK
     #
@@ -448,7 +465,13 @@ class DataLoader:
 
         return self._loadWeekly(
             self.COMMODITY_SOYBEAN,
-            "Commodity_Soybean_NOK_st_Weekly"
+            ["Commodity_Soybean_SMA_NOK_st_Weekly",
+            "Commodity_Soybean_SM1_NOK_st_Weekly",
+            "Commodity_Soybean_SM2_NOK_st_Weekly",
+            "Commodity_Soybean_SM3_NOK_st_Weekly",
+            "Commodity_Soybean_SM4_NOK_st_Weekly",
+            "Commodity_Soybean_SM5_NOK_st_Weekly",
+            "Commodity_Soybean_SM6_NOK_st_Weekly"], freq = "daily"
         )
     
     ##
@@ -461,7 +484,32 @@ class DataLoader:
 
         return self._loadWeekly(
             self.COMMODITY_RAPSEED,
-            "Commodity_Rapseed_NOK_mt_Weekly"
+            ["Commodity_Rapseed_IJA_NOK_mt_Weekly",
+            "Commodity_Rapseed_IJ1_NOK_mt_Weekly",
+            "Commodity_Rapseed_IJ2_NOK_mt_Weekly",
+            "Commodity_Rapseed_IJ3_NOK_mt_Weekly",
+            "Commodity_Rapseed_IJ4_NOK_mt_Weekly",
+            "Commodity_Rapseed_IJ5_NOK_mt_Weekly",
+            "Commodity_Rapseed_IJ6_NOK_mt_Weekly"], freq = "daily"
+        )
+    
+    ##
+    #  Uploads, cleans and transforms the Carbon time series data
+    #  From 07 January 2000 to 05 March 2026
+    #  @dataset Bloomberg ticker MOA, source EUA ETS System
+    #  @return weekly rapseed last price per metric ton in NOK
+    #
+    def CommodityCarbonPrice(self):
+
+        return self._loadWeekly(
+            self.COMMODITY_RAPSEED,
+            ["Commodity_Carbon_MOA_NOK_mt_Weekly",
+            "Commodity_Carbon_MO1_NOK_mt_Weekly",
+            "Commodity_Carbon_MO2_NOK_mt_Weekly",
+            "Commodity_Carbon_MO3_NOK_mt_Weekly",
+            "Commodity_Carbon_MO4_NOK_mt_Weekly",
+            "Commodity_Carbon_MO5_NOK_mt_Weekly",
+            "Commodity_Carbon_MO6_NOK_mt_Weekly"], freq = "daily"
         )
         
     ##
@@ -474,7 +522,7 @@ class DataLoader:
 
         return self._loadWeekly(
             self.EQUITY_PRICE_MOWI,
-            "Equity_MOWI_NOK_Weekly"
+            "Equity_MOWI_NOK_Weekly", freq = "daily"
         )
 
     ##
@@ -487,48 +535,93 @@ class DataLoader:
 
         return self._loadWeekly(
             self.EQUITY_PRICE_SALMAR,
-            "Equity_SALMAR_NOK_Weekly"
+            "Equity_SALMAR_NOK_Weekly", freq = "daily"
         )
 
     ##
     #  Generic loader for Bloomberg-style time series
-    #  Converts daily data to weekly frequency aligned to Monday
+    #  Converts data to weekly frequency aligned to Wednesday
     #
-    def _loadWeekly(self, fileName, columnName):
+    def _loadWeekly(self, fileName, columnName, freq="daily"):
 
-        ## Clean
-        _data = pd.read_excel(fileName, header=0)
+        ## Read sheets
+        _data = pd.read_excel(fileName, sheet_name=None, header=0)
 
-        dataClean = _data.copy()
-        dataClean["Date"] = pd.to_datetime(dataClean["Date"], format="%Y-%m-%d")
-        dataClean = dataClean.sort_values("Date", ascending=True)
-        dataClean = dataClean.rename(columns={"Last Price": columnName})
+        dataSheets = []
 
-        ## Transform
-        dataTransform = (
-            dataClean
-            .set_index("Date")
-            .resample("W-MON")
-            .last()
-            .reset_index()
-        )
+        for i, sheetData in enumerate(_data.values()):
 
-        dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
-        dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
-        dataTransform["Month"] = dataTransform["Date"].dt.month
-        dataTransform          = dataTransform[["Year", "Week", "Month"]
-                                       + list(dataTransform.columns.drop(["Year", "Week", "Month"]))]
+            ## Clean
+            dataClean = sheetData.copy()
+            dataClean["Date"] = pd.to_datetime(dataClean["Date"], format="%Y-%m-%d")
+            dataClean = dataClean.sort_values("Date", ascending=True)
 
-        dataTransform = dataTransform.drop(columns=["Date"])
+            ## Column naming
+            if isinstance(columnName, list):
+                assert len(columnName) == len(_data), "Column names do not match number of sheets"
+                columnCurrent = columnName[i]
+            else:
+                columnCurrent = columnName
 
-        dataTransform = dataTransform.astype({
-            "Year": "int64",
-            "Week": "int64",
-            "Month": "int64",
-            columnName: "float64"
-        })
+            dataClean = dataClean.rename(columns={"Last Price": columnCurrent})
 
-        return dataTransform
+            ## Transform
+            if freq == "daily":
+
+                dataTransform = (
+                    dataClean
+                    .set_index("Date")
+                    .resample("W-WED")
+                    .last()
+                    .reset_index()
+                )
+
+            elif freq == "weekly":
+
+                dataTransform = dataClean.copy()
+
+            elif freq == "monthly":
+
+                dataTransform = (
+                    dataClean
+                    .set_index("Date")
+                    .resample("W-WED")
+                    .ffill()
+                    .reset_index()
+                )
+
+            dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
+            dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
+            dataTransform["Month"] = dataTransform["Date"].dt.month
+
+            dataTransform = dataTransform[
+                ["Year", "Week", "Month"]
+                + list(dataTransform.columns.drop(["Year", "Week", "Month"]))
+            ]
+
+            dataTransform = dataTransform.drop(columns=["Date"])
+
+            dataTransform = dataTransform.astype({
+                "Year": "int64",
+                "Week": "int64",
+                "Month": "int64",
+                columnCurrent: "float64"
+            })
+
+            dataSheets.append(dataTransform)
+
+        ## Merge sheets
+        dataFinal = dataSheets[0]
+
+        for df in dataSheets[1:]:
+            dataFinal = pd.merge(
+                dataFinal,
+                df,
+                on=["Year", "Week", "Month"],
+                how="outer"
+            )
+
+        return dataFinal
 
     ##
     #   Merge everything
@@ -541,7 +634,7 @@ class DataLoader:
         _data        = self.SalmonPriceFishPool()
 
         _salmonsb    = self.SalmonPriceSSB()
-        _salmonbb    = self.SalmonPriceBloomberg()
+        #_salmonbb    = self.SalmonPriceBloomberg()
         _escapes     = self.SalmonEscapes()
 
         _broiler     = self.ProteinBroilerPrice()
@@ -555,6 +648,9 @@ class DataLoader:
         _soybean     = self.CommoditySoybeanPrice()
         _rapseed     = self.CommodityRapseedPrice()
 
+        #
+        _carbon      = self.CommodityCarbonPrice()
+
         _mowi        = self.EquityMOWIPrice()
         _salmar      = self.EquitySALMARPrice()
 
@@ -563,21 +659,29 @@ class DataLoader:
         _biomass     = self.SalmonBiomass()
         _exports     = self.SalmonExport()
 
-        ## Create Date from FishPool
+        ## Create Date from FishPool (Wednesday of ISO week)
         _data["Date"] = pd.to_datetime(
             _data["Year"].astype(str)
             + "-W"
             + _data["Week"].astype(str).str.zfill(2)
-            + "-1",
+            + "-3",
             format="%G-W%V-%u"
         )
 
+        ## Determine earliest Biomass observation
+        _biomassStart = pd.to_datetime(
+            _biomass["Year"].astype(str)
+            + "-"
+            + _biomass["Month"].astype(str).str.zfill(2)
+            + "-01"
+        ).min()
+
         ## Create continuous weekly calendar
-        start = _data["Date"].min()
+        start = _biomassStart
         end   = _data["Date"].max()
 
         calendar = pd.DataFrame({
-            "Date": pd.date_range(start=start, end=end, freq="W-MON")
+            "Date": pd.date_range(start=start, end=end, freq="W-WED")
         })
 
         calendar["Year"]  = calendar["Date"].dt.isocalendar().year
@@ -593,10 +697,10 @@ class DataLoader:
 
         ## Weekly merges (aligned by Date)
         for w in [
-            _salmonsb, _salmonbb, _escapes,
+            _salmonsb, _escapes,
             _broiler, _pig,
             _eurnok, _usdnok,
-            _brent, _wheat, _soybean, _rapseed,
+            _brent, _wheat, _soybean, _rapseed, _carbon,
             _mowi, _salmar
         ]:
 
@@ -606,7 +710,7 @@ class DataLoader:
                 w["Year"].astype(str)
                 + "-W"
                 + w["Week"].astype(str).str.zfill(2)
-                + "-1",
+                + "-3",
                 format="%G-W%V-%u"
             )
 
@@ -633,7 +737,6 @@ class DataLoader:
         ## Sort dataset
         data = data.sort_values("Date").reset_index(drop=True)
 
-
         ## Forwards fill only market variables
         _fillCols = data.columns[
             data.columns.str.contains(
@@ -651,10 +754,8 @@ class DataLoader:
         ## Time index
         data.insert(0, "t", range(len(data)))
 
-        ## Convert Date to weekly period
-        data["Date"] = data["Date"].dt.to_period("W")
-
-        _cutoff = pd.Period("2025-12-28", freq="W")
+        ## Cut dataset
+        _cutoff = pd.Timestamp("2025-12-31")
 
         data = data[data["Date"] <= _cutoff]
 
@@ -737,6 +838,8 @@ class DataLoader:
         print("\n--- WEEK CONTINUITY ---")
 
         _weekDiff = data["Date"].diff().dropna()
+
+        assert (_weekDiff == pd.Timedelta(days=7)).all()
 
         print(_weekDiff.value_counts().head())
 

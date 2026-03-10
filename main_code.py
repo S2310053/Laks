@@ -22,8 +22,9 @@ loadData              = DataLoader()
 
 data = loadData.Data()
 
-#print(data)
-#print(data.columns)
-#print(data.info())
+print(data)
+print(data.columns)
+print(data.info())
 
-#loadData.ValidateData(data)
+loadData.ValidateData(data)
+data.to_excel(r"C:\Users\arzol\OneDrive\Escritorio\data.xlsx", index = False)
