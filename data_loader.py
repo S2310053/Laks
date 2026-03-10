@@ -497,12 +497,12 @@ class DataLoader:
     #  Uploads, cleans and transforms the Carbon time series data
     #  From 07 January 2000 to 05 March 2026
     #  @dataset Bloomberg ticker MOA, source EUA ETS System
-    #  @return weekly rapseed last price per metric ton in NOK
+    #  @return weekly carbon last price per metric ton in NOK
     #
     def CommodityCarbonPrice(self):
 
         return self._loadWeekly(
-            self.COMMODITY_RAPSEED,
+            self.COMMODITY_CARBON,
             ["Commodity_Carbon_MOA_NOK_mt_Weekly",
             "Commodity_Carbon_MO1_NOK_mt_Weekly",
             "Commodity_Carbon_MO2_NOK_mt_Weekly",
@@ -578,7 +578,13 @@ class DataLoader:
 
             elif freq == "weekly":
 
-                dataTransform = dataClean.copy()
+                dataTransform = (
+                                    dataClean
+                                    .set_index("Date")
+                                    .resample("W-WED")
+                                    .last()
+                                    .reset_index()
+                                )
 
             elif freq == "monthly":
 

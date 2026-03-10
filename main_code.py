@@ -27,4 +27,4 @@ print(data.columns)
 print(data.info())
 
 loadData.ValidateData(data)
-data.to_excel(r"C:\Users\arzol\OneDrive\Escritorio\data.xlsx", index = False)
+#data.to_excel(r"C:\Users\arzol\OneDrive\Escritorio\data.xlsx", index = False)
