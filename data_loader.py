@@ -86,8 +86,11 @@ class DataLoader:
                           "Month"                  : "int64",
                           "Salmon_NOK_kg_FP_Weekly": "float64",
                           "Salmon_EUR_kg_FP_Weekly": "float64"
-                           }) 
-        
+                           })
+
+        assert not dataTransform.duplicated(subset=["Year", "Week"]).any(), \
+            "FishPool has duplicate (Year, Week) rows with conflicting values"
+
         return dataTransform
     
     ##
@@ -308,12 +311,12 @@ class DataLoader:
         dataTransform = dataClean.copy()
         dataTransform["Date"] = pd.to_datetime(dataTransform["Date"])
         dataTransform         = dataTransform.set_index("Date")
-        dataTransform.loc[dataTransform["Salmon_Escapes_Rep_Escaped"] == "E:10 - 100", "Salmon_Escapes_Rep_Escaped"] = "55"
-        dataTransform["Salmon_Escapes_Rep_Escaped"] = (
-                                dataTransform["Salmon_Escapes_Rep_Escaped"]
-                                .astype(str)
-                                .str.replace("E:", "", regex=False)
-                                )
+        _rep = dataTransform["Salmon_Escapes_Rep_Escaped"].astype(str)
+        _range = _rep.str.extract(r"E:\s*(\d+)\s*-\s*(\d+)")
+        _midpoint = (_range[0].astype(float) + _range[1].astype(float)) / 2
+        _rep = _rep.str.replace("E:", "", regex=False)
+        _rep = pd.to_numeric(_rep, errors="coerce")
+        dataTransform["Salmon_Escapes_Rep_Escaped"] = _rep.fillna(_midpoint)
         dataTransform["Salmon_Escapes_Rep_Escaped"] = pd.to_numeric(dataTransform["Salmon_Escapes_Rep_Escaped"], errors="coerce")
         dataTransform["Salmon_Escapes_Avg_Wt_Grams"] = pd.to_numeric(dataTransform["Salmon_Escapes_Avg_Wt_Grams"], errors="coerce")
 
@@ -337,12 +340,6 @@ class DataLoader:
         )
         dataTransform = dataTransform.drop(columns=["_wt_x_escaped", "_rep_with_wt"])
         
-        dataTransform["Salmon_Escapes_Rep_Escaped"] = (
-            dataTransform["Salmon_Escapes_Rep_Escaped"].fillna(0)
-        )
-        dataTransform["Salmon_Escapes_Recapture"] = (
-            dataTransform["Salmon_Escapes_Recapture"].fillna(0)
-        )
 
         dataTransform          = dataTransform.reset_index()
         _colNames              = ["Date", "Salmon_Escapes_Rep_Escaped_Weekly", "Salmon_Escapes_Recapture_Weekly", "Salmon_Escapes_Avg_Wt_Grams_Weekly"]
@@ -756,8 +753,8 @@ class DataLoader:
         ).min()
 
         ## Create continuous weekly calendar
-        start = _biomassStart
-        end   = _data["Date"].max()
+        start = pd.Timestamp("2000-01-05")
+        end   = pd.Timestamp("2025-12-31")
 
         calendar = pd.DataFrame({
             "Date": pd.date_range(start=start, end=end, freq="W-WED")
@@ -828,12 +825,7 @@ class DataLoader:
 
         data[_fillCols] = data[_fillCols].ffill(limit=2)
 
-        ## Cut dataset
-        _cutoff = pd.Timestamp("2025-12-31")
-
-        data = data[data["Date"] <= _cutoff]
-
-        ## Time index (after cut to ensure sequential values)
+        ## Time index
         data = data.reset_index(drop=True)
         data.insert(0, "t", range(len(data)))
 
