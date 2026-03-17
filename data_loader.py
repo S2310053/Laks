@@ -563,13 +563,13 @@ class DataLoader:
 
         return self._loadWeekly(
             self.COMMODITY_RAPSEED,
-            ["Commodity_Rapseed_IJA_NOK_mt_Weekly",
-            "Commodity_Rapseed_IJ1_NOK_mt_Weekly",
-            "Commodity_Rapseed_IJ2_NOK_mt_Weekly",
-            "Commodity_Rapseed_IJ3_NOK_mt_Weekly",
-            "Commodity_Rapseed_IJ4_NOK_mt_Weekly",
-            "Commodity_Rapseed_IJ5_NOK_mt_Weekly",
-            "Commodity_Rapseed_IJ6_NOK_mt_Weekly"], freq = "daily"
+            ["Commodity_Rapeseed_IJA_NOK_mt_Weekly",
+            "Commodity_Rapeseed_IJ1_NOK_mt_Weekly",
+            "Commodity_Rapeseed_IJ2_NOK_mt_Weekly",
+            "Commodity_Rapeseed_IJ3_NOK_mt_Weekly",
+            "Commodity_Rapeseed_IJ4_NOK_mt_Weekly",
+            "Commodity_Rapeseed_IJ5_NOK_mt_Weekly",
+            "Commodity_Rapeseed_IJ6_NOK_mt_Weekly"], freq = "daily"
         )
     
     ##

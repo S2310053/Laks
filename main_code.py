@@ -28,11 +28,11 @@ data = loadData.Data()
 
 
 loadData.ValidateData(data)
-data.to_excel(r"C:\Users\arzol\OneDrive\Escritorio\data.xlsx", index = False)
+data.to_excel(r"C:\Users\arzol\OneDrive\Escritorio\Work\Master Thesis\Laks\Data\data.xlsx", index = False)
 
 #plt.plot(data["Date"], data["Salmon_Exported_Tons_SSB_Weekly"])
 
-correl = data.corr()
+#correl = data.corr()
 
-correl.to_excel(r"C:\Users\arzol\OneDrive\Escritorio\correlation.xlsx", index = True)
+#correl.to_excel(r"C:\Users\arzol\OneDrive\Escritorio\correlation.xlsx", index = True)
 
