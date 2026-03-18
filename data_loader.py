@@ -771,7 +771,7 @@ class DataLoader:
 
         ## Create continuous weekly calendar
         start = pd.Timestamp("2000-01-05")
-        end   = pd.Timestamp("2025-12-31")
+        end   = pd.Timestamp("2026-03-31")
 
         calendar = pd.DataFrame({
             "Date": pd.date_range(start=start, end=end, freq="W-WED")
