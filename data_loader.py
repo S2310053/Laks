@@ -149,19 +149,30 @@ class DataLoader:
     #  @return  monthly salmon exports in weight and value in USD ############
     #
     def SalmonExport(self):
-        
+
         ## Clean
+        ## Source: UN Comtrade — Norway exports of Atlantic salmon (cmdCode 030212)
+        ## ReleaseDate column contains the actual publication date per observation,
+        ## enabling precise publication lag computation for the FeatureEngineer registry
         _fileName         = self.SALMON_EXPORTS
         _data             = pd.read_excel(_fileName, sheet_name= "Sheet1")
-        _selectColumns    = ["refPeriodId", "netWgt", "primaryValueUSD", "AvgValueKg"]
+        _selectColumns    = ["refPeriodId", "ReleaseDate", "netWgt", "primaryValueUSD", "AvgValueKg"]
         dataClean         = _data[_selectColumns].copy()
-        _columnNames      = ["Date", "Salmon_Export_Net_Weight_Kg_Monthly", "Salmon_Export_Value_USD_Monthly"
-                             , "Salmon_Export_Avg_Price_USD_Kg_Monthly"]
+        _columnNames      = ["Date", "ReleaseDate", "Salmon_Export_Net_Weight_Kg_Monthly",
+                             "Salmon_Export_Value_USD_Monthly", "Salmon_Export_Avg_Price_USD_Kg_Monthly"]
         dataClean.columns = _columnNames
-        dataClean["Date"] = pd.to_datetime(dataClean["Date"], format = "%Y%m%d")
+        dataClean["Date"]        = pd.to_datetime(dataClean["Date"],        format="%Y%m%d")
+        dataClean["ReleaseDate"] = pd.to_datetime(dataClean["ReleaseDate"], format="%Y%m%d")
+
+        ## Publication lag: days from end of reference month to release date
+        ## This gives the actual UN Comtrade publication lag per observation.
+        ## Median lag in weeks is stored as a class constant for the FeatureEngineer registry
+        _refMonthEnd                = dataClean["Date"] + pd.offsets.MonthEnd(0)
+        _pub_lag_days               = (dataClean["ReleaseDate"] - _refMonthEnd).dt.days
+        self.export_pub_lag_weeks   = int(round(_pub_lag_days.median() / 7))
 
         ## Transform
-        dataTransform          = dataClean.copy()
+        dataTransform          = dataClean.drop(columns=["ReleaseDate"]).copy()
         dataTransform["Year"]  = dataTransform["Date"].dt.year
         dataTransform["Month"] = dataTransform["Date"].dt.month
         dataTransform          = dataTransform.drop(columns = ["Date"])
@@ -185,8 +196,10 @@ class DataLoader:
     #  @dataset Directory of fisheries detailed biomass data
     #  @return  "panel" monthly production-area-level aquaculture data on stock, biomass,
     #           feed, harvest, and losses
+    #  @note    UTSETT_SMOLT_STK = smolts RELEASED into sea cages this month (flow variable,
+    #           fish <250g), not a stock count. Named Smolt_Releases accordingly
     #
-    def SalmonBiomass(self): 
+    def SalmonBiomass(self):
 
         ## Cleans
         _fileName      = self.SALMON_BIOMASS
@@ -197,8 +210,8 @@ class DataLoader:
                         " UTKAST_STK", " RØMMING_STK", " ANDRE_STK"]
         dataClean      = _data[_selectColumns]
         _columnNames   = ["Year", "Month", "Salmon_Biomass_County", "Salmon_Biomass_Species", "Salmon_Biomass_Fish_Stock",
-                        "Salmon_Biomass_Kg", "Salmon_Biomass_Smolt_Stock", "Salmon_Biomass_Feed_Kg", "Salmon_Biomass_Harvest_Kg", 
-                        "Salmon_Biomass_Harvest_N", "Salmon_Biomass_Mortality_N", "Salmon_Biomass_Discard_N", 
+                        "Salmon_Biomass_Kg", "Salmon_Biomass_Smolt_Releases", "Salmon_Biomass_Feed_Kg", "Salmon_Biomass_Harvest_Kg",
+                        "Salmon_Biomass_Harvest_N", "Salmon_Biomass_Mortality_N", "Salmon_Biomass_Discard_N",
                         "Salmon_Biomass_Escape_N", "Salmon_Biomass_Other_Loss_N"]
         dataClean.columns = _columnNames
         dataClean         = dataClean[dataClean["Salmon_Biomass_Species"] == "LAKS"]
@@ -292,16 +305,20 @@ class DataLoader:
         ## Clean
         _fileName                 = self.SALMON_ESCAPES
         _data                     = pd.read_excel(_fileName)
-        _selectColumns            = ["Dato", "Lokalitets- navn", "Lokalitets- nummer", "Fylke", 
-                                    "Selskap", "Art", "Rømmings- estimat", "Rapportert rømt",
+        ## Note: "Rømmings- estimat" (escape estimate) is excluded — it contains range strings
+        ## (e.g. "1-10", "E:10-100") for preliminary estimates before official counts are filed.
+        ## "Rapportert rømt" is the official reported count and is the correct value to use.
+        ## Rømmings-estimat is retained as a potential future gap-filler (see pipeline notes).
+        _selectColumns            = ["Dato", "Lokalitets- navn", "Lokalitets- nummer", "Fylke",
+                                    "Selskap", "Art", "Rapportert rømt",
                                     "Snittvekt (gram)", "Gjenfangst"]
         dataClean                = _data[_selectColumns]
-        dataClean.loc[:,"Dato"]  = pd.to_datetime(dataClean["Dato"], format = "%m/%d/%Y").dt.date   
+        dataClean.loc[:,"Dato"]  = pd.to_datetime(dataClean["Dato"], format = "%m/%d/%Y").dt.date
         dataClean                = dataClean.sort_values("Dato", ascending=True)
-        dataClean                = dataClean.reset_index(drop = True)                      
-        _columnNames             = ["Date", "Salmon_Escapes_Site_Name", "Salmon_Escapes_Site_Number", 
-                                    "Salmon_Escapes_County", "Salmon_Escapes_Company", "Salmon_Escapes_Species", 
-                                    "Salmon_Escapes_Est_Num_Escaped", "Salmon_Escapes_Rep_Escaped", "Salmon_Escapes_Avg_Wt_Grams",
+        dataClean                = dataClean.reset_index(drop = True)
+        _columnNames             = ["Date", "Salmon_Escapes_Site_Name", "Salmon_Escapes_Site_Number",
+                                    "Salmon_Escapes_County", "Salmon_Escapes_Company", "Salmon_Escapes_Species",
+                                    "Salmon_Escapes_Rep_Escaped", "Salmon_Escapes_Avg_Wt_Grams",
                                     "Salmon_Escapes_Recapture"]
         dataClean.columns        = _columnNames
         dataClean                = dataClean[dataClean["Salmon_Escapes_Species"] == "Laks"]
