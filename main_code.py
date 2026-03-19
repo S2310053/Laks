@@ -6,6 +6,7 @@
 # Imports libraries needed
 #
 from data_loader import DataLoader
+from feature_engineer import featureEngineer
 
 import matplotlib
 matplotlib.use("TkAgg")
@@ -19,15 +20,19 @@ import seaborn as sns
 # Loads the data
 #
 loadData              = DataLoader()
+feature               = featureEngineer()
 
 data = loadData.Data()
+loadData.ValidateData(data)
+data = feature._lagByPublication(data)
+
 
 #print(data)
 #print(data.columns)
 #print(data.info())
 
 
-loadData.ValidateData(data)
-data.to_excel(r"C:\Users\arzol\OneDrive\Escritorio\Work\Master Thesis\Laks\Data\data.xlsx", index = False)
+
+data.to_csv(r"C:\Users\arzol\OneDrive\Escritorio\Work\Master Thesis\Laks\Data\data.csv", index = False)
 
 
