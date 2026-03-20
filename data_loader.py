@@ -27,7 +27,7 @@ class DataLoader:
     SALMON_EXPORTS         = _salmon + _salmonMarket + "Exports.xlsx"
     SALMON_BIOMASS         = _salmon + _salmonMarket + "Biomass.xlsx"
     SALMON_ESCAPES         = _salmon + _salmonMarket + "Escapes.xlsx"
-    CPI_NORWAY             = _salmon + _salmonMarket + "CPI.xlsx"
+    CPI_NORWAY             = _salmon + _salmonMarket + "CPI_YOY.xlsx"
 
     PROTEIN_CPI_MEAT       = _protein + "CPI_Meat.xlsx"
     PROTEIN_PRICE_BROILER  = _protein + "Price_Broiler.xlsx"
@@ -392,7 +392,7 @@ class DataLoader:
         _data          = _data[:-2]
         _data          = _data.iloc[::-1]
 
-        _dataM         = _data.drop(columns = "Årsgj.snitt2")
+        _dataM         = _data.drop(columns=_data.columns[1])
         _months        = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"]
         _dataM.columns = ["Year"] + _months
 
