@@ -389,7 +389,6 @@ class DataLoader:
         ## Clean
         _fileName      = self.CPI_NORWAY
         _data          = pd.read_excel(_fileName)
-        _data          = _data[:-2]
         _data          = _data.iloc[::-1]
 
         _dataM         = _data.drop(columns=_data.columns[1])
