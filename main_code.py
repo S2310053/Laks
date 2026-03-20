@@ -25,6 +25,7 @@ feature               = featureEngineer()
 data = loadData.Data()
 loadData.ValidateData(data)
 data = feature._lagByPublication(data)
+feature.validatePublicationLags(data)
 
 
 #print(data)
