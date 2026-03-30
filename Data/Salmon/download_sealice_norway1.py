@@ -20,8 +20,8 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
 # ── Configuration — fill these in ─────────────────────────────────────────────
-CLIENT_ID     = "YOUR_CLIENT_ID"
-CLIENT_SECRET = "YOUR_CLIENT_SECRET"
+CLIENT_ID     = "askildsen.fillip@gmail.com:Salmon_Boyz"
+CLIENT_SECRET = "Salmonboyzisnumber1"
 OUTPUT_FILE   = "sealice_norway_weekly.xlsx"
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -45,8 +45,8 @@ def get_token():
 
 
 def fetch_week(token, year, week):
-    url  = f"{API_BASE}/v1/geodata/fishhealth/locality/week/{year}/{week}"
-    resp = requests.get(url, headers={"Authorization": f"Bearer {token}"})
+    url  = f"{API_BASE}/v2/geodata/fishhealth/locality/{year}/{week}"
+    resp = requests.post(url, json={}, headers={"Authorization": f"Bearer {token}"})
     if resp.status_code == 204:
         return []
     resp.raise_for_status()
@@ -70,21 +70,37 @@ def safe_mean(values):
 
 
 def aggregate_week(year, week, localities):
-    reported = [l for l in localities if l.get("hasReported")]
+    # v2 API: lice data is nested under "liceReport"
+    reported = [l for l in localities if (l.get("liceReport") or {}).get("hasReported")]
     if not reported:
         return None
 
-    adult_female  = safe_mean([l.get("avgAdultFemaleLice")  for l in reported])
-    sea_temp      = safe_mean([l.get("avgSeaTemperature")   for l in reported])
+    def get_lice(l, field):
+        return (l.get("liceReport") or {}).get("adultFemaleLice", {}).get(field)
+
+    def get_temp(l):
+        return (l.get("liceReport") or {}).get("seaTemperature")
+
+    def has_treatment(l):
+        t = l.get("liceTreatments")
+        if isinstance(t, list):
+            return len(t) > 0
+        if isinstance(t, dict):
+            return any([
+                t.get("medicinalTreatments"),
+                t.get("nonMedicinalTreatments"),
+                t.get("combinationTreatments"),
+                t.get("bathTreatments"),
+                t.get("mechanicalRemovalTreatment"),
+                t.get("inFeedTreatments"),
+            ])
+        return False
+
+    adult_female  = safe_mean([get_lice(l, "average")  for l in reported])
+    sea_temp      = safe_mean([get_temp(l)              for l in reported])
     n             = len(reported)
-    above_limit   = round(sum(1 for l in reported if l.get("isAboveLimit")) / n * 100, 2) if n else None
-    any_treatment = round(sum(
-        1 for l in reported if any([
-            l.get("hasBathTreatment"),
-            l.get("hasMechanicalTreatment"),
-            l.get("hasInFeedTreatment"),
-        ])
-    ) / n * 100, 2) if n else None
+    above_limit   = round(sum(1 for l in reported if l.get("isAboveThreshold")) / n * 100, 2) if n else None
+    any_treatment = round(sum(1 for l in reported if has_treatment(l)) / n * 100, 2) if n else None
 
     return {
         "year":                 year,
