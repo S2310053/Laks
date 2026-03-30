@@ -27,6 +27,7 @@ class DataLoader:
     SALMON_EXPORTS         = _salmon + _salmonMarket + "Exports.xlsx"
     SALMON_BIOMASS         = _salmon + _salmonMarket + "Biomass.xlsx"
     SALMON_ESCAPES         = _salmon + _salmonMarket + "Escapes.xlsx"
+    SALMON_LICE            = _salmon + "/sealice_norway_weekly.xlsx"
     CPI_NORWAY             = _salmon + _salmonMarket + "CPI_YOY.xlsx"
 
     PROTEIN_CPI_MEAT       = _protein + "CPI_Meat.xlsx"
@@ -375,6 +376,65 @@ class DataLoader:
                                  "Salmon_Escapes_Avg_Wt_Grams_Weekly": "float64",
                                  "Salmon_Escapes_Recapture_Weekly"   : "float64"
         })
+
+        return dataTransform
+
+    ##
+    #  Uploads, cleans and transforms the national weekly sea lice time series
+    #  From week 1 2012 to week 14 2026
+    #  @dataset BarentsWatch national aggregation of site-level lice counts
+    #           (source: Fiskeridirektoratet / Mattilsynet via BarentsWatch)
+    #  @return  weekly national average female lice per fish, sea temperature at 3m,
+    #           % sites above 0.5 limit, % sites with any treatment
+    #
+    def SalmonLice(self):
+
+        ## Clean
+        _fileName   = self.SALMON_LICE
+        _data       = pd.read_excel(_fileName)
+        _selectCols = ["Year", "Week",
+                       "Localities Reporting",
+                       "Avg Adult Female Lice",
+                       "Avg Sea Temp 3m (°C)",
+                       "% Above Limit (0.5)",
+                       "% Any Treatment"]
+        dataClean         = _data[_selectCols].copy()
+        dataClean.columns = ["Year", "Week",
+                             "Salmon_Lice_LocalitiesReporting_Weekly",
+                             "Salmon_Lice_AvgFemale_Weekly",
+                             "Salmon_SeaTemp_3m_Weekly",
+                             "Salmon_Lice_PctAboveLimit_Weekly",
+                             "Salmon_Lice_PctTreated_Weekly"]
+
+        ## Derive Month from ISO week
+        dataClean["Month"] = pd.to_datetime(
+            dataClean["Year"].astype(str)
+            + "-W"
+            + dataClean["Week"].astype(str).str.zfill(2)
+            + "-1",
+            format="%G-W%V-%u"
+        ).dt.month
+
+        ## Transform
+        dataTransform = dataClean[["Year", "Week", "Month",
+                                   "Salmon_Lice_LocalitiesReporting_Weekly",
+                                   "Salmon_Lice_AvgFemale_Weekly",
+                                   "Salmon_SeaTemp_3m_Weekly",
+                                   "Salmon_Lice_PctAboveLimit_Weekly",
+                                   "Salmon_Lice_PctTreated_Weekly"]].copy()
+        dataTransform = dataTransform.astype({
+            "Year"                                   : "int64",
+            "Week"                                   : "int64",
+            "Month"                                  : "int64",
+            "Salmon_Lice_LocalitiesReporting_Weekly" : "int64",
+            "Salmon_Lice_AvgFemale_Weekly"           : "float64",
+            "Salmon_SeaTemp_3m_Weekly"               : "float64",
+            "Salmon_Lice_PctAboveLimit_Weekly"        : "float64",
+            "Salmon_Lice_PctTreated_Weekly"          : "float64",
+        })
+
+        assert not dataTransform.duplicated(subset=["Year", "Week"]).any(), \
+            "SalmonLice has duplicate (Year, Week) rows"
 
         return dataTransform
 
@@ -750,6 +810,7 @@ class DataLoader:
         _biomass     = self.SalmonBiomass()
         _biomassCoh  = self.SalmonBiomassCohort()
         _exports     = self.SalmonExport()
+        _lice        = self.SalmonLice()
 
         ## Create Date from FishPool (Wednesday of ISO week)
         _data["Date"] = pd.to_datetime(
@@ -794,7 +855,8 @@ class DataLoader:
             _broiler, _pig,
             _eurnok, _usdnok,
             _brent, _wheat, _soybean, _rapseed, _carbon,
-            _mowi, _salmar
+            _mowi, _salmar,
+            _lice
         ]:
 
             w = w.copy()
