@@ -27,7 +27,7 @@ class DataLoader:
     SALMON_EXPORTS         = _salmon + _salmonMarket + "Exports.xlsx"
     SALMON_BIOMASS         = _salmon + _salmonMarket + "Biomass.xlsx"
     SALMON_ESCAPES         = _salmon + _salmonMarket + "Escapes.xlsx"
-    SALMON_LICE            = _salmon + "/sealice_norway_weekly.xlsx"
+    SALMON_LICE            = _salmon + _salmonMarket + "sealice_norway_weekly.xlsx"
     CPI_NORWAY             = _salmon + _salmonMarket + "CPI_YOY.xlsx"
 
     PROTEIN_CPI_MEAT       = _protein + "CPI_Meat.xlsx"
@@ -47,6 +47,11 @@ class DataLoader:
 
     EQUITY_PRICE_MOWI      = _salmon + _salmonEquity + "Price_MOWI.xlsx"
     EQUITY_PRICE_SALMAR    = _salmon + _salmonEquity + "Price_SALMAR.xlsx"
+
+    PROTEIN_SHRIMP_PRICE   = _protein + "GlobalShrimpPrice.xlsx"
+
+    SALMON_FORWARD_OLD     = _salmon + _salmonMarket + "Forwardprices_20062024.csv"
+    SALMON_FORWARD_NEW     = _salmon + _salmonMarket + "Forwardprices_20252026.csv"
 
     def __init__(self):
         pass
@@ -694,6 +699,148 @@ class DataLoader:
         )
 
     ##
+    #  Uploads, cleans and transforms the Global Shrimp Price time series
+    #  From January 1992 to February 2026
+    #  @dataset FRED series PSHRIUSDM — IMF Primary Commodity Prices, Shrimp
+    #  @return  weekly shrimp price per metric ton in USD (forward-filled from monthly)
+    #
+    def ProteinGlobalShrimpPrice(self):
+
+        ## Clean
+        _fileName = self.PROTEIN_SHRIMP_PRICE
+        _data     = pd.read_excel(_fileName, sheet_name="Monthly", header=0)
+        dataClean = _data.copy()
+        dataClean["observation_date"] = pd.to_datetime(dataClean["observation_date"])
+        dataClean = dataClean.sort_values("observation_date").reset_index(drop=True)
+        dataClean = dataClean.rename(columns={
+            "observation_date": "Date",
+            "PSHRIUSDM"       : "Protein_Shrimp_USD_mt_Weekly"
+        })
+
+        ## Transform: forward-fill monthly to weekly Wednesday
+        dataTransform = (
+            dataClean
+            .set_index("Date")
+            .resample("W-WED")
+            .ffill()
+            .reset_index()
+        )
+
+        dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
+        dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+        dataTransform = dataTransform[["Year", "Week", "Month", "Protein_Shrimp_USD_mt_Weekly"]]
+        dataTransform = dataTransform.astype({
+            "Year" : "int64",
+            "Week" : "int64",
+            "Month": "int64",
+            "Protein_Shrimp_USD_mt_Weekly": "float64"
+        })
+
+        return dataTransform
+
+    ##
+    #  Uploads, cleans and transforms FishPool salmon forward prices
+    #  Two source files: 2006-2025 (NOK/kg) and 2024-2026 (EUR/tonne).
+    #  The EUR/tonne file is converted to NOK/kg using the EURNOK rate on each
+    #  closing date, then the two files are merged into a single series.
+    #  Old file takes precedence where both overlap (Sep 2024 – Jan 2025).
+    #  @dataset FishPool — All Fish Pool forward prices
+    #  @return  weekly M+1, M+3, M+6, M+12 salmon forward prices in NOK/kg
+    #
+    def SalmonForwardPrice(self):
+
+        _horizons = {1: "M1", 3: "M3", 6: "M6", 12: "M12"}
+
+        def _extractHorizons(df, value_col):
+            df = df.copy()
+            df["ClosingDate"] = pd.to_datetime(df["Closing Date"])
+            df["Year"]        = df["Year"].astype(int)
+            df["Month"]       = df["Month"].astype(int)
+            df[value_col]     = pd.to_numeric(df[value_col], errors="coerce")
+
+            df["Horizon"] = (
+                (df["Year"]  - df["ClosingDate"].dt.year)  * 12
+                + (df["Month"] - df["ClosingDate"].dt.month)
+            )
+            df = df[df["Horizon"].isin(_horizons.keys())]
+
+            pivot = df.pivot_table(
+                index="ClosingDate",
+                columns="Horizon",
+                values=value_col,
+                aggfunc="last"
+            )
+            pivot.columns = [f"Salmon_Forward_{_horizons[h]}_Weekly" for h in pivot.columns]
+            return pivot.reset_index()
+
+        ## --- Load daily EURNOK rates for EUR/tonne → NOK/kg conversion ---
+        _eurnok = pd.read_excel(self.CURRENCY_EURNOK, sheet_name="Sheet1", header=0)
+        _eurnok["Date"] = pd.to_datetime(_eurnok["Date"])
+        _eurnok = _eurnok.sort_values("Date").rename(columns={"Last Price": "EURNOK"})
+
+        ## --- Old file: 2006–Jan 2025, values already in NOK/kg ---
+        _dfOld = pd.read_csv(self.SALMON_FORWARD_OLD,
+                             sep=";", skiprows=1, decimal=",", index_col=False)
+        _dfOld = _dfOld.dropna(axis=1, how="all")
+        _oldResult = _extractHorizons(_dfOld, "NOK Value")
+
+        ## --- New file: Sep 2024–Mar 2026, values in EUR/tonne ---
+        ##     Convert to NOK/kg: EUR/tonne × EURNOK / 1000
+        _dfNew = pd.read_csv(self.SALMON_FORWARD_NEW,
+                             sep=";", skiprows=1, decimal=",", index_col=False)
+        _dfNew = _dfNew.dropna(axis=1, how="all")
+        _dfNew["ClosingDate"] = pd.to_datetime(_dfNew["Closing Date"])
+        _dfNew["Value"]       = pd.to_numeric(_dfNew["Value"], errors="coerce")
+
+        _closingRates = pd.merge_asof(
+            _dfNew[["ClosingDate"]].drop_duplicates().sort_values("ClosingDate"),
+            _eurnok[["Date", "EURNOK"]],
+            left_on="ClosingDate", right_on="Date", direction="backward"
+        ).drop(columns="Date")
+
+        _dfNew = _dfNew.merge(_closingRates, on="ClosingDate")
+        _dfNew["Value"] = _dfNew["Value"] * _dfNew["EURNOK"] / 1000
+        _newResult = _extractHorizons(_dfNew, "Value")
+
+        ## --- Combine: old file where available, new file fills the rest ---
+        _fwdCols = [f"Salmon_Forward_{l}_Weekly" for l in ["M1", "M3", "M6", "M12"]]
+
+        dataDaily = pd.merge(_oldResult, _newResult,
+                             on="ClosingDate", how="outer",
+                             suffixes=("_old", "_new"))
+        dataDaily = dataDaily.sort_values("ClosingDate")
+
+        for col in _fwdCols:
+            dataDaily[col] = dataDaily[f"{col}_old"].fillna(dataDaily[f"{col}_new"])
+
+        dataDaily = dataDaily[["ClosingDate"] + _fwdCols]
+
+        ## --- Resample to weekly Wednesday ---
+        dataTransform = (
+            dataDaily
+            .set_index("ClosingDate")
+            .resample("W-WED")
+            .last()
+            .reset_index()
+        )
+        dataTransform = dataTransform.rename(columns={"ClosingDate": "Date"})
+        dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
+        dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+
+        dataTransform = dataTransform[["Year", "Week", "Month"] + _fwdCols]
+        dataTransform = dataTransform.astype({
+            "Year" : "int64",
+            "Week" : "int64",
+            "Month": "int64"
+        })
+        for col in _fwdCols:
+            dataTransform[col] = dataTransform[col].astype("float64")
+
+        return dataTransform
+
+    ##
     #  Generic loader for Bloomberg-style time series
     #  Converts data to weekly frequency aligned to Wednesday
     #
@@ -811,6 +958,8 @@ class DataLoader:
         _biomassCoh  = self.SalmonBiomassCohort()
         _exports     = self.SalmonExport()
         _lice        = self.SalmonLice()
+        _shrimp      = self.ProteinGlobalShrimpPrice()
+        _forward     = self.SalmonForwardPrice()
 
         ## Create Date from FishPool (Wednesday of ISO week)
         _data["Date"] = pd.to_datetime(
@@ -829,8 +978,11 @@ class DataLoader:
             + "-01"
         ).min()
 
-        ## Create continuous weekly calendar
-        start = pd.Timestamp("2000-01-05")
+        ## Create continuous weekly calendar.
+        ## Start 4 weeks before 2000-01-05 so _lagByPublication can shift
+        ## pre-calendar shrimp values (1992-1999) into the Jan 2000 rows.
+        ## The warm-up rows are trimmed inside _lagByPublication.
+        start = pd.Timestamp("1999-12-08")
         end   = pd.Timestamp("2026-03-31")
 
         calendar = pd.DataFrame({
@@ -856,7 +1008,7 @@ class DataLoader:
             _eurnok, _usdnok,
             _brent, _wheat, _soybean, _rapseed, _carbon,
             _mowi, _salmar,
-            _lice
+            _lice, _shrimp, _forward
         ]:
 
             w = w.copy()

@@ -27,13 +27,9 @@ loadData.ValidateData(data)
 data = feature._lagByPublication(data)
 feature.validatePublicationLags(data)
 
-
 #print(data)
 #print(data.columns)
 #print(data.info())
 
 
-
-data.to_csv(r"C:\Users\arzol\OneDrive\Escritorio\Work\Master Thesis\Laks\Data\data.csv", index = False)
-
-
+data.to_csv(r"/Users/fillipaskildsen/Documents/GitHub/Data/data.csv", index = False)

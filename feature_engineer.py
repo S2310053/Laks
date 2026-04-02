@@ -63,7 +63,11 @@ class featureEngineer:
         "Commodity_Carbon_MO3_NOK_mt_Weekly":         0,
         "Commodity_Carbon_MO4_NOK_mt_Weekly":         0,
         "Commodity_Carbon_MO5_NOK_mt_Weekly":         0,
-        "Commodity_Carbon_MO6_NOK_mt_Weekly":         0}
+        "Commodity_Carbon_MO6_NOK_mt_Weekly":         0,
+        "Salmon_Forward_M1_Weekly":                   0,   # FishPool end-of-day closing price, NOK/kg
+        "Salmon_Forward_M3_Weekly":                   0,
+        "Salmon_Forward_M6_Weekly":                   0,
+        "Salmon_Forward_M12_Weekly":                  0}
 
     _oneWeek  = {
         "Salmon_NOK_kg_SSB_Weekly":                   1,   # SSB publishes following week
@@ -71,7 +75,8 @@ class featureEngineer:
         "Protein_Broiler_EUR_100_kg_Weekly":          1,   # EU Commission publishes following Wednesday
         "Salmon_Escapes_Rep_Escaped_Weekly":          1,   # 24h statutory reporting window
         "Salmon_Escapes_Recapture_Weekly":            1,
-        "Salmon_Escapes_Avg_Wt_Grams_Weekly":         1}
+        "Salmon_Escapes_Avg_Wt_Grams_Weekly":         1,
+        "Protein_Shrimp_USD_mt_Weekly":               4}   # IMF/FRED monthly, ~4-week publication lag
 
     PUBLISH_LAG_WEEKS = _zeroWeek | _oneWeek
 
@@ -124,6 +129,7 @@ class featureEngineer:
         "Salmon_Export_Net_Weight_Kg_Monthly":        39,
         "Salmon_Export_Value_USD_Monthly":            39,
         "Salmon_Export_Avg_Price_USD_Kg_Monthly":     39,
+
     }
 
     def __init__(self):
@@ -197,6 +203,10 @@ class featureEngineer:
             # Restore original row order and assign back
             merged  = merged.sort_values("orig_order")
             data[col] = merged["value"].values
+
+        ## Trim the 4-week warm-up buffer added by Data() and reset the time index
+        data = data[data["Date"] >= pd.Timestamp("2000-01-05")].reset_index(drop=True)
+        data["t"] = range(len(data))
 
         return data
 
