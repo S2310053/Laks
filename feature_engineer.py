@@ -24,12 +24,12 @@ class featureEngineer:
     #  that real-time availability was confirmed (no shift needed).
     #
     _zeroWeek = {
-        "EURNOK_Weekly":                              0,   # Last Friday's closing rate, available by Wednesday
-        "USDNOK_Weekly":                              0,   # Last Friday's closing rate, available by Wednesday
-        "Protein_Pig_EUR_100_kg_Weekly":              0,   # Last Friday's price, available by Wednesday
+        "EURNOK_Weekly":                              0,   
+        "USDNOK_Weekly":                              0,   
+        "Protein_Pig_EUR_100_kg_Weekly":              0,   
         "Equity_MOWI_NOK_Weekly":                     0,
         "Equity_SALMAR_NOK_Weekly":                   0,
-        "Commodity_Brent_COA_NOK_bbl_Weekly":         0,   # Wednesday Bloomberg close
+        "Commodity_Brent_COA_NOK_bbl_Weekly":         0,   
         "Commodity_Brent_CO1_NOK_bbl_Weekly":         0,
         "Commodity_Brent_CO2_NOK_bbl_Weekly":         0,
         "Commodity_Brent_CO3_NOK_bbl_Weekly":         0,
@@ -76,6 +76,13 @@ class featureEngineer:
         "Salmon_Escapes_Rep_Escaped_Weekly":          1,   # 24h statutory reporting window
         "Salmon_Escapes_Recapture_Weekly":            1,
         "Salmon_Escapes_Avg_Wt_Grams_Weekly":         1,
+        "Salmon_Lice_LocalitiesReporting_Weekly":     1,   # BarentsWatch: published following week
+        "Salmon_Lice_AvgFemale_Weekly":               1,
+        "Salmon_SeaTemp_3m_Weekly":                   1,
+        "Salmon_Lice_PctAboveLimit_Weekly":           1,
+        "Salmon_Lice_PctTreated_Weekly":              1,
+        "Salmon_Lice_ICA_Count_Weekly":               1,   # ISA (ICA) locality count from BarentsWatch API
+        "Salmon_ILA_ActiveLocalities_Weekly":         1,   # Active ILA outbreaks from Mattilsynet ila_pd.csv
         "Protein_Shrimp_USD_mt_Weekly":               4}   # IMF/FRED monthly, ~4-week publication lag
 
     PUBLISH_LAG_WEEKS = _zeroWeek | _oneWeek
@@ -84,14 +91,6 @@ class featureEngineer:
     #
     #  Each value is the number of calendar days after the END OF THE
     #  REFERENCE MONTH when the data becomes publicly available.
-    #  This is the EOMONTH offset — it mirrors Excel's =EOMONTH([@Date],0)+N.
-    #
-    #  IMPORTANT: these are NOT "days from the reference Wednesday".
-    #  The pipeline doc reports median days from Wednesday (25, 35, 55).
-    #  Conversion: EOMONTH_days = Wednesday_days − 16.5
-    #  where 16.5 = average days remaining in month at a mid-month Wednesday.
-    #
-    #  Example: biomass = 35 days from Wednesday → 35 − 16.5 = 18.5 → 20 days from EOMONTH.
     #
     #  Implementation: _lagByPublication uses merge_asof to assign each row
     #  the most recently published monthly value, defined as the latest month M
@@ -101,12 +100,10 @@ class featureEngineer:
     PUBLISH_LAG_EOMONTH = {
 
         # SSB releases ~10th of following month
-        # Wednesday_days ≈ 25  →  EOMONTH_days = 25 − 16.5 ≈ 10  (exact: SSB publishes on the 10th)
         "CPI_Norway_Monthly":                         10,
         "Protein_Meat_Inflation_YoY_Monthly":         10,  # Eurostat HICP; same schedule
 
         # Fiskeridirektoratet biomass panel, releases ~20th of following month
-        # Wednesday_days ≈ 35  →  EOMONTH_days = 35 − 16.5 ≈ 20
         "Salmon_Biomass_Fish_Stock_Monthly":          20,
         "Salmon_Biomass_Kg_Monthly":                  20,
         "Salmon_Biomass_Smolt_Releases_Monthly":      20,
@@ -124,11 +121,10 @@ class featureEngineer:
         "Salmon_Biomass_Fish_Stock_Age1_Monthly":     20,
         "Salmon_Biomass_Fish_Stock_Age2Plus_Monthly": 20,
 
-        # UN Comtrade multi-step pipeline (SSB → customs → Comtrade)
-        # Wednesday_days ≈ 55  →  EOMONTH_days = 55 − 16.5 ≈ 39
-        "Salmon_Export_Net_Weight_Kg_Monthly":        39,
-        "Salmon_Export_Value_USD_Monthly":            39,
-        "Salmon_Export_Avg_Price_USD_Kg_Monthly":     39,
+        # UN Comtrade multi-step pipeline (SSB → customs → Comtrade), releases ~10th of 2nd next month
+        "Salmon_Export_Net_Weight_Kg_Monthly":        40,
+        "Salmon_Export_Value_USD_Monthly":            40,
+        "Salmon_Export_Avg_Price_USD_Kg_Monthly":     40,
 
     }
 
@@ -337,3 +333,330 @@ class featureEngineer:
                   f"{str(exp_pub_wed.date()):>11}  {str(trans_date.date()):>12}  {status}")
 
         print(f"\n{SEP}\n")
+
+    ##
+    #   Build the feature matrix used for forecasting models.
+    #
+    #   Variables in the order specified:
+    #     Target : Δln(Salmon_NOK_kg_FP_Weekly)
+    #     1.  Δln spot lag-1 (AR term; additional lags added after ACF/PACF)
+    #     2.  ln(FP / SSB) spread              [deferred — Granger test first]
+    #     3.  ln(F_M1  / Spot)
+    #     4.  ln(F_M3  / Spot)
+    #     5.  ln(F_M6  / Spot)
+    #     6.  ln(F_M12 / Spot)
+    #     7.  Forward slope     ln(F_M12 / F_M1)
+    #     8.  Forward curvature ln(F_M1) − 2·ln(F_M6) + ln(F_M12)
+    #     9.  Export volume Δln
+    #     10. Biomass Age0  ln-level
+    #     11. Biomass Age1  ln-level
+    #     12. Biomass Age2+ ln-level
+    #     13. Biomass share Age2+ (raw proportion)
+    #     14. Average weight kg/fish (raw)
+    #     15. FCR proxy Feed/Biomass (raw)
+    #     16. Harvest Intensity Harvest/Biomass (raw)
+    #     17. Loss Rate (raw)
+    #     18. Mortality Rate (raw)              [deferred — collinearity check]
+    #     19. Smolt ln-level, lagged smolt_lag weeks
+    #     20. ILA active localities ln(1+x)
+    #     21. Sea lice avg female ln(1+x)
+    #     22. Sea lice treatment % (raw)
+    #     23. Sea temperature (raw)
+    #     24. Δln EURNOK
+    #     25. CPI Norway level (already YoY %)
+    #     26. Δln Shrimp
+    #     27. Δln Broiler
+    #     28. Δln Pig
+    #     29. Protein Meat Inflation YoY level  [deferred — may drop]
+    #     30. Δln Soybean
+    #     31. Δln Wheat
+    #     32. Δln Rapeseed
+    #     33. Δln Brent
+    #     34–37. Commodity curve slope  × 4  ln(C6/C1)
+    #     38–41. Commodity curve curv   × 4  ln(C1)−2·ln(C3)+ln(C6)
+    #
+    #   @data       DataFrame output of _lagByPublication()
+    #   @smolt_lag  weeks to lag smolt releases (default 65)
+    #   @return     DataFrame with Date, y, and all feature columns
+    #
+    def buildFeatureMatrix(self,
+                           data: pd.DataFrame,
+                           smolt_lag: int = 65) -> pd.DataFrame:
+
+        df   = data.copy()
+        spot = df["Salmon_NOK_kg_FP_Weekly"]
+
+        def _ln(s):
+            """Log level — returns NaN where input is zero, negative, or missing."""
+            s      = pd.to_numeric(s, errors="coerce")
+            result = np.full(len(s), np.nan)
+            mask   = s.values > 0
+            result[mask] = np.log(s.values[mask])
+            return pd.Series(result, index=s.index)
+
+        def _dln(s):
+            """Week-over-week log return — returns 0 where input is zero or negative."""
+            return _ln(s).diff()
+
+        out = pd.DataFrame({"Date": df["Date"]})
+
+        # ── Target ────────────────────────────────────────────────────────────
+        out["Salmon (NOK/KG)"] = _dln(spot)
+
+        # ── 1. AR term: Δln spot lag-1 ────────────────────────────────────────
+        out["Salmon (NOK/KG) 1w"] = _dln(spot).shift(1)
+
+        # ── 2. FP–SSB spread (deferred) ───────────────────────────────────────
+        if "Salmon_NOK_kg_SSB_Weekly" in df.columns:
+            out["Spread (FP - SSB)"] = _ln(spot / df["Salmon_NOK_kg_SSB_Weekly"])
+
+        # ── 3–6. Forward bases: ln(F_Mn / Spot) ──────────────────────────────
+        for label, col in [("FWD 1m",  "Salmon_Forward_M1_Weekly"),
+                            ("FWD 3m",  "Salmon_Forward_M3_Weekly"),
+                            ("FWD 6m",  "Salmon_Forward_M6_Weekly"),
+                            ("FWD 12m", "Salmon_Forward_M12_Weekly")]:
+            if col in df.columns:
+                out[label] = _ln(df[col] / spot)
+
+        # ── 7–8. Forward curve slope & curvature ─────────────────────────────
+        if all(c in df.columns for c in ["Salmon_Forward_M1_Weekly",
+                                          "Salmon_Forward_M6_Weekly",
+                                          "Salmon_Forward_M12_Weekly"]):
+            lnM1  = _ln(df["Salmon_Forward_M1_Weekly"])
+            lnM6  = _ln(df["Salmon_Forward_M6_Weekly"])
+            lnM12 = _ln(df["Salmon_Forward_M12_Weekly"])
+            out["FWD Slope"]     = lnM12 - lnM1
+            out["FWD Curvature"] = lnM1 - 2 * lnM6 + lnM12
+
+        # ── 9. Export volume Δln ──────────────────────────────────────────────
+        if "Salmon_Exported_Tons_SSB_Weekly" in df.columns:
+            out["Export Volume"] = _dln(df["Salmon_Exported_Tons_SSB_Weekly"])
+
+        # ── 10–12. Biomass by age: ln-level ───────────────────────────────────
+        for label, col in [("Biomass (0 - 1)",  "Salmon_Biomass_Biomass_Kg_Age0_Monthly"),
+                            ("Biomass (1 - 2)",  "Salmon_Biomass_Biomass_Kg_Age1_Monthly"),
+                            ("Biomass (2+)",     "Salmon_Biomass_Biomass_Kg_Age2Plus_Monthly")]:
+            if col in df.columns:
+                out[label] = _ln(df[col])
+
+        # ── 13. Biomass share Age2+ ───────────────────────────────────────────
+        c0, c1, c2 = ("Salmon_Biomass_Biomass_Kg_Age0_Monthly",
+                       "Salmon_Biomass_Biomass_Kg_Age1_Monthly",
+                       "Salmon_Biomass_Biomass_Kg_Age2Plus_Monthly")
+        if all(c in df.columns for c in [c0, c1, c2]):
+            out["Biomass Share 2+"] = df[c2] / (df[c0] + df[c1] + df[c2])
+
+        # ── 14. Average weight kg/fish ────────────────────────────────────────
+        if all(c in df.columns for c in ["Salmon_Biomass_Kg_Monthly",
+                                          "Salmon_Biomass_Fish_Stock_Monthly"]):
+            out["Avg Weight (KG)"] = (df["Salmon_Biomass_Kg_Monthly"]
+                                      / df["Salmon_Biomass_Fish_Stock_Monthly"])
+
+        # ── 15–18. Derived ratios ─────────────────────────────────────────────
+        bkg   = "Salmon_Biomass_Kg_Monthly"
+        stock = "Salmon_Biomass_Fish_Stock_Monthly"
+
+        if all(c in df.columns for c in ["Salmon_Biomass_Feed_Kg_Monthly", bkg]):
+            out["FCR"] = df["Salmon_Biomass_Feed_Kg_Monthly"] / df[bkg]
+
+        if all(c in df.columns for c in ["Salmon_Biomass_Harvest_Kg_Monthly", bkg]):
+            out["Harvest Intensity"] = df["Salmon_Biomass_Harvest_Kg_Monthly"] / df[bkg]
+
+        loss_cols = ["Salmon_Biomass_Mortality_N_Monthly",
+                     "Salmon_Biomass_Discard_N_Monthly",
+                     "Salmon_Biomass_Escape_N_Monthly",
+                     "Salmon_Biomass_Other_Loss_N_Monthly"]
+        if all(c in df.columns for c in loss_cols + [stock]):
+            total_loss = sum(df[c] for c in loss_cols)
+            out["Loss Rate"]     = total_loss / df[stock]
+            out["Mortality Rate"] = df["Salmon_Biomass_Mortality_N_Monthly"] / df[stock]
+
+        # ── 19. Smolt: ln-level, lagged smolt_lag weeks ───────────────────────
+        if "Salmon_Biomass_Smolt_Releases_Monthly" in df.columns:
+            out["Smolt Release 65w"] = _ln(df["Salmon_Biomass_Smolt_Releases_Monthly"]).shift(smolt_lag)
+
+        # ── 20. ILA: ln(1 + x) ────────────────────────────────────────────────
+        if "Salmon_ILA_ActiveLocalities_Weekly" in df.columns:
+            out["ISA Outbreak"] = np.log1p(df["Salmon_ILA_ActiveLocalities_Weekly"])
+
+        # ── 21. Sea lice: ln(1 + x) ───────────────────────────────────────────
+        if "Salmon_Lice_AvgFemale_Weekly" in df.columns:
+            out["Lice Outbreak"] = np.log1p(df["Salmon_Lice_AvgFemale_Weekly"])
+
+        # ── 22–23. Lice treatment & sea temperature ───────────────────────────
+        if "Salmon_Lice_PctTreated_Weekly" in df.columns:
+            out["Lice Treatment (%)"] = df["Salmon_Lice_PctTreated_Weekly"] / 100
+        if "Salmon_SeaTemp_3m_Weekly" in df.columns:
+            out["Sea Temp"] = df["Salmon_SeaTemp_3m_Weekly"]
+
+        # ── 24. EURNOK Δln ────────────────────────────────────────────────────
+        if "EURNOK_Weekly" in df.columns:
+            out["EURNOK"] = _dln(df["EURNOK_Weekly"])
+
+        # ── 25. CPI Norway (level, already YoY %) ────────────────────────────
+        if "CPI_Norway_Monthly" in df.columns:
+            out["CPI NO"] = df["CPI_Norway_Monthly"]
+
+        # ── 26. Shrimp Δln ────────────────────────────────────────────────────
+        if "Protein_Shrimp_USD_mt_Weekly" in df.columns:
+            out["Shrimp Price (Global)"] = _dln(df["Protein_Shrimp_USD_mt_Weekly"])
+
+        # ── 27–28. Competing proteins Δln ────────────────────────────────────
+        for label, col in [("Broiler Price (EU)", "Protein_Broiler_EUR_100_kg_Weekly"),
+                            ("Pig Price (EU)",     "Protein_Pig_EUR_100_kg_Weekly")]:
+            if col in df.columns:
+                out[label] = _dln(df[col])
+
+        # ── 29. Meat Inflation YoY (deferred) ────────────────────────────────
+        if "Protein_Meat_Inflation_YoY_Monthly" in df.columns:
+            out["Meat CPI (EU)"] = df["Protein_Meat_Inflation_YoY_Monthly"]
+
+        # ── 30–41. Commodities: Δln C01/C03/C06, slope ln(C06/C01),
+        #          curvature ln(C01) − 2·ln(C03) + ln(C06) ─────────────────────
+        _commodities = [
+            ("Brent",    "Commodity_Brent_CO1_NOK_bbl_Weekly",
+                         "Commodity_Brent_CO3_NOK_bbl_Weekly",
+                         "Commodity_Brent_CO6_NOK_bbl_Weekly"),
+            ("Wheat",    "Commodity_Wheat_CA1_NOK_mt_Weekly",
+                         "Commodity_Wheat_CA3_NOK_mt_Weekly",
+                         "Commodity_Wheat_CA6_NOK_mt_Weekly"),
+            ("Rapeseed", "Commodity_Rapeseed_IJ1_NOK_mt_Weekly",
+                         "Commodity_Rapeseed_IJ3_NOK_mt_Weekly",
+                         "Commodity_Rapeseed_IJ6_NOK_mt_Weekly"),
+            ("Soybean",  "Commodity_Soybean_SM1_NOK_st_Weekly",
+                         "Commodity_Soybean_SM3_NOK_st_Weekly",
+                         "Commodity_Soybean_SM6_NOK_st_Weekly"),
+        ]
+        for label, c1, c3, c6 in _commodities:
+            if c1 in df.columns:
+                out[f"{label} FWD 1m"] = _dln(df[c1])
+            if c3 in df.columns:
+                out[f"{label} FWD 3m"] = _dln(df[c3])
+            if c6 in df.columns:
+                out[f"{label} FWD 6m"] = _dln(df[c6])
+            if c1 in df.columns and c6 in df.columns:
+                out[f"{label} FWD Slope"] = _ln(df[c6] / df[c1])
+            if all(c in df.columns for c in [c1, c3, c6]):
+                out[f"{label} FWD Curvature"] = _ln(df[c1]) - 2 * _ln(df[c3]) + _ln(df[c6])
+
+        return out.reset_index(drop=True)
+
+    ##
+    #   Validate the feature matrix produced by buildFeatureMatrix().
+    #
+    #   Checks (per column):
+    #     1. Column presence & dtypes
+    #     2. Infinite values
+    #     3. NaN counts and first/last valid date
+    #     4. Range plausibility — flags outliers beyond expected bounds
+    #     5. Δln / log-ratio columns: flags if any |value| > 0.5 (50% weekly move)
+    #     6. Proportion columns: flags if any value outside [0, 1]
+    #     7. Summary: rows fully populated (no NaN in any feature column)
+    #     8. Top-10 absolute correlations with target y
+    #
+    #   @matrix   DataFrame output of buildFeatureMatrix()
+    #
+    def validateFeatureMatrix(self, matrix: pd.DataFrame) -> None:
+
+        from scipy import stats as _stats
+
+        SEP  = "═" * 80
+        SEP2 = "─" * 80
+
+        feat_cols = [c for c in matrix.columns if c not in ("Date", "y")]
+        n         = len(matrix)
+
+        print(f"\n{SEP}")
+        print(f"  FEATURE MATRIX VALIDATION REPORT")
+        print(f"  Rows: {n}   Columns: {len(feat_cols)} features + Date + y")
+        if "Date" in matrix.columns:
+            print(f"  Date range: {matrix['Date'].min().date()} → {matrix['Date'].max().date()}")
+        print(SEP)
+
+        # ── 1–5. Per-column checks ─────────────────────────────────────────────
+        print(f"\n── COLUMN CHECKS {'─'*63}")
+        hdr = f"  {'Column':<35} {'NaNs':>6}  {'First valid':>11}  {'Min':>10}  {'Max':>10}  {'Infs':>5}  Status"
+        print(hdr)
+        print(f"  {'─'*35} {'─'*6}  {'─'*11}  {'─'*10}  {'─'*10}  {'─'*5}  ──────")
+
+        # Expected bounds for quick plausibility check
+        _dln_cols  = [c for c in feat_cols if c.endswith("_dln") or c == "spot_dln_lag1" or c == "y"]
+        _prop_cols = [c for c in feat_cols if any(x in c for x in
+                      ["share", "pct_treated", "harvest_intensity", "loss_rate",
+                       "mortality_rate", "fcr_proxy", "biomass_share"])]
+        _basis_cols = [c for c in feat_cols if "basis" in c or "slope" in c or "curv" in c or "spread" in c]
+
+        issues = []
+        for col in feat_cols:
+            s           = matrix[col]
+            nan_count   = int(s.isna().sum())
+            inf_count   = int(np.isinf(s.replace([np.nan], [0])).sum())
+            valid       = s.dropna()
+            col_min     = f"{valid.min():.4f}" if len(valid) else "—"
+            col_max     = f"{valid.max():.4f}" if len(valid) else "—"
+            first_valid = (matrix.loc[s.first_valid_index(), "Date"].date()
+                           if s.first_valid_index() is not None and "Date" in matrix.columns
+                           else "—")
+
+            flags = []
+            if inf_count:
+                flags.append(f"⚠ {inf_count} inf")
+            if nan_count == n:
+                flags.append("✗ ALL NaN")
+            if col in _dln_cols and len(valid) and valid.abs().max() > 0.5:
+                flags.append(f"⚠ |max|>{valid.abs().max():.2f} (>50%wk)")
+            if col in _prop_cols and len(valid) and (valid.min() < 0 or valid.max() > 1.5):
+                flags.append(f"⚠ out of [0,1.5]")
+            if col in _basis_cols and len(valid) and valid.abs().max() > 1.0:
+                flags.append(f"⚠ |basis|>{valid.abs().max():.2f}")
+
+            status = "  ".join(flags) if flags else "✓"
+            if flags:
+                issues.append(col)
+
+            col_disp = (col[:33] + "..") if len(col) > 35 else col
+            print(f"  {col_disp:<35} {nan_count:>6}  {str(first_valid):>11}  "
+                  f"{col_min:>10}  {col_max:>10}  {inf_count:>5}  {status}")
+
+        # ── 6. Proportion sanity ───────────────────────────────────────────────
+        print(f"\n── PROPORTION COLUMNS (should be in [0, ~1]) {'─'*35}")
+        for col in _prop_cols:
+            s = matrix[col].dropna()
+            if len(s) == 0:
+                continue
+            ok = "✓" if s.min() >= 0 and s.max() <= 1.5 else f"⚠  min={s.min():.4f}  max={s.max():.4f}"
+            print(f"  {col:<40}  {ok}")
+
+        # ── 7. Fully populated rows ────────────────────────────────────────────
+        print(f"\n── ROW COMPLETENESS {'─'*60}")
+        core_cols   = [c for c in feat_cols if c not in
+                       ("fp_ssb_spread", "mortality_rate", "meat_inflation_yoy")]
+        complete    = matrix[core_cols].dropna()
+        pct         = 100 * len(complete) / n if n else 0
+        first_full  = (matrix.loc[matrix[core_cols].dropna().index[0], "Date"].date()
+                       if len(complete) and "Date" in matrix.columns else "—")
+        print(f"  Rows with no NaN in core features : {len(complete):>5} / {n}  ({pct:.1f}%)")
+        print(f"  First fully-populated row         : {first_full}")
+        print(f"  (Excluded from core: fp_ssb_spread, mortality_rate, meat_inflation_yoy)")
+
+        # ── 8. Correlation with target y ──────────────────────────────────────
+        if "y" in matrix.columns:
+            print(f"\n── TOP-10 ABSOLUTE CORRELATIONS WITH TARGET y {'─'*34}")
+            corr = (matrix[feat_cols + ["y"]]
+                    .dropna()
+                    .corr()["y"]
+                    .drop("y", errors="ignore")
+                    .abs()
+                    .sort_values(ascending=False)
+                    .head(10))
+            for col, val in corr.items():
+                bar = "█" * int(val * 20)
+                print(f"  {col:<40}  {val:>6.4f}  {bar}")
+
+        # ── Summary ───────────────────────────────────────────────────────────
+        print(f"\n{SEP2}")
+        if issues:
+            print(f"  ⚠  {len(issues)} column(s) flagged: {', '.join(issues)}")
+        else:
+            print(f"  ✓  No issues found.")
+        print(f"{SEP}\n")

@@ -28,8 +28,10 @@ class DataLoader:
     SALMON_BIOMASS         = _salmon + _salmonMarket + "Biomass.xlsx"
     SALMON_ESCAPES         = _salmon + _salmonMarket + "Escapes.xlsx"
     SALMON_LICE            = _salmon + _salmonMarket + "sealice_norway_weekly.xlsx"
+    SALMON_ILA             = _salmon + "/ila_pd.csv"
+    
     CPI_NORWAY             = _salmon + _salmonMarket + "CPI_YOY.xlsx"
-
+    PROTEIN_SHRIMP_PRICE   = _protein + "GlobalShrimpPrice.xlsx"
     PROTEIN_CPI_MEAT       = _protein + "CPI_Meat.xlsx"
     PROTEIN_PRICE_BROILER  = _protein + "Price_Broiler.xlsx"
     PROTEIN_PRICE_PIG      = _protein + "Price_Pig.xlsx"
@@ -41,14 +43,10 @@ class DataLoader:
     COMMODITY_WHEAT        = _commodity + "Price_Wheat.xlsx"
     COMMODITY_SOYBEAN      = _commodity + "Price_Soybean.xlsx"
     COMMODITY_RAPSEED      = _commodity + "Price_Rapseed.xlsx"
-
-    ##
     COMMODITY_CARBON       = _commodity + "Price_Carbon.xlsx"
 
     EQUITY_PRICE_MOWI      = _salmon + _salmonEquity + "Price_MOWI.xlsx"
     EQUITY_PRICE_SALMAR    = _salmon + _salmonEquity + "Price_SALMAR.xlsx"
-
-    PROTEIN_SHRIMP_PRICE   = _protein + "GlobalShrimpPrice.xlsx"
 
     SALMON_FORWARD_OLD     = _salmon + _salmonMarket + "Forwardprices_20062024.csv"
     SALMON_FORWARD_NEW     = _salmon + _salmonMarket + "Forwardprices_20252026.csv"
@@ -397,19 +395,24 @@ class DataLoader:
         ## Clean
         _fileName   = self.SALMON_LICE
         _data       = pd.read_excel(_fileName)
+        # ICA column may not exist in older Excel files — add it as zero if missing
+        if "ICA Count (ISA)" not in _data.columns:
+            _data["ICA Count (ISA)"] = 0
         _selectCols = ["Year", "Week",
                        "Localities Reporting",
                        "Avg Adult Female Lice",
                        "Avg Sea Temp 3m (°C)",
                        "% Above Limit (0.5)",
-                       "% Any Treatment"]
+                       "% Any Treatment",
+                       "ICA Count (ISA)"]
         dataClean         = _data[_selectCols].copy()
         dataClean.columns = ["Year", "Week",
                              "Salmon_Lice_LocalitiesReporting_Weekly",
                              "Salmon_Lice_AvgFemale_Weekly",
                              "Salmon_SeaTemp_3m_Weekly",
                              "Salmon_Lice_PctAboveLimit_Weekly",
-                             "Salmon_Lice_PctTreated_Weekly"]
+                             "Salmon_Lice_PctTreated_Weekly",
+                             "Salmon_Lice_ICA_Count_Weekly"]
 
         ## Derive Month from ISO week
         dataClean["Month"] = pd.to_datetime(
@@ -426,7 +429,8 @@ class DataLoader:
                                    "Salmon_Lice_AvgFemale_Weekly",
                                    "Salmon_SeaTemp_3m_Weekly",
                                    "Salmon_Lice_PctAboveLimit_Weekly",
-                                   "Salmon_Lice_PctTreated_Weekly"]].copy()
+                                   "Salmon_Lice_PctTreated_Weekly",
+                                   "Salmon_Lice_ICA_Count_Weekly"]].copy()
         dataTransform = dataTransform.astype({
             "Year"                                   : "int64",
             "Week"                                   : "int64",
@@ -436,10 +440,72 @@ class DataLoader:
             "Salmon_SeaTemp_3m_Weekly"               : "float64",
             "Salmon_Lice_PctAboveLimit_Weekly"        : "float64",
             "Salmon_Lice_PctTreated_Weekly"          : "float64",
+            "Salmon_Lice_ICA_Count_Weekly"           : "float64",
         })
 
         assert not dataTransform.duplicated(subset=["Year", "Week"]).any(), \
             "SalmonLice has duplicate (Year, Week) rows"
+
+        return dataTransform
+
+    ##
+    #  Counts the number of unique salmon localities with an active ILA
+    #  (Infectious Salmon Anemia) case in each ISO week.
+    #  A locality is "active" in week W if:
+    #      Fra dato  ≤  last day of week W
+    #      AND (Til dato is NaN  OR  Til dato ≥ first day of week W)
+    #  @dataset BarentsWatch / Mattilsynet — ila_pd.csv (full event log)
+    #  @return  weekly count of unique ILA localities (Year, Week, Month,
+    #           Salmon_ILA_ActiveLocalities_Weekly)
+    #
+    def SalmonILA(self):
+
+        _data = pd.read_csv(self.SALMON_ILA, sep=",", encoding="utf-8-sig")
+
+        ## Filter ILA only
+        _ila = _data[_data["Sykdom"] == "ILA"].copy()
+
+        ## Parse dates — Fra dato is always present; Til dato may be NaN (still active)
+        _ila["Fra dato"] = pd.to_datetime(_ila["Fra dato"], errors="coerce")
+        _ila["Til dato"] = pd.to_datetime(_ila["Til dato"], errors="coerce")
+
+        ## Build a weekly calendar from the earliest event to today (Wednesday anchors)
+        _minDate = _ila["Fra dato"].min()
+        _weeks   = pd.date_range(
+            start = _minDate - pd.Timedelta(days=_minDate.weekday()),  # back to Monday
+            end   = pd.Timestamp.today(),
+            freq  = "W-WED"
+        )
+
+        ## For each Wednesday, count unique localities active that week
+        _records = []
+        for _wed in _weeks:
+            _mon = _wed - pd.Timedelta(days=2)   # Monday of the same ISO week
+            _sun = _wed + pd.Timedelta(days=4)   # Sunday of the same ISO week
+
+            _active = _ila[
+                (_ila["Fra dato"] <= _sun) &
+                (_ila["Til dato"].isna() | (_ila["Til dato"] >= _mon))
+            ]["Lokalitetsnummer"].nunique()
+
+            _iso   = _wed.isocalendar()
+            _records.append({
+                "Year":  int(_iso[0]),
+                "Week":  int(_iso[1]),
+                "Month": int(_wed.month),
+                "Salmon_ILA_ActiveLocalities_Weekly": int(_active)
+            })
+
+        dataTransform = pd.DataFrame(_records)
+        dataTransform = dataTransform.astype({
+            "Year":  "int64",
+            "Week":  "int64",
+            "Month": "int64",
+            "Salmon_ILA_ActiveLocalities_Weekly": "float64"
+        })
+
+        assert not dataTransform.duplicated(subset=["Year", "Week"]).any(), \
+            "SalmonILA has duplicate (Year, Week) rows"
 
         return dataTransform
 
@@ -930,13 +996,8 @@ class DataLoader:
 
         ## Load datasets
         _data        = self.SalmonPriceFishPool()
-
         _salmonsb    = self.SalmonPriceSSB()
-        #_salmonbb    = self.SalmonPriceBloomberg()
         _escapes     = self.SalmonEscapes()
-
-        _broiler     = self.ProteinBroilerPrice()
-        _pig         = self.ProteinPigPrice()
 
         _eurnok      = self.EURNOK()
         _usdnok      = self.USDNOK()
@@ -945,19 +1006,20 @@ class DataLoader:
         _wheat       = self.CommodityWheatPrice()
         _soybean     = self.CommoditySoybeanPrice()
         _rapseed     = self.CommodityRapseedPrice()
-
-        #
         _carbon      = self.CommodityCarbonPrice()
 
         _mowi        = self.EquityMOWIPrice()
         _salmar      = self.EquitySALMARPrice()
 
         _cpi         = self.CPINorway()
+        _broiler     = self.ProteinBroilerPrice()
+        _pig         = self.ProteinPigPrice()
         _cpimeat     = self.ProteinCPIMeat()
         _biomass     = self.SalmonBiomass()
         _biomassCoh  = self.SalmonBiomassCohort()
         _exports     = self.SalmonExport()
         _lice        = self.SalmonLice()
+        _ila         = self.SalmonILA()
         _shrimp      = self.ProteinGlobalShrimpPrice()
         _forward     = self.SalmonForwardPrice()
 
@@ -1008,7 +1070,7 @@ class DataLoader:
             _eurnok, _usdnok,
             _brent, _wheat, _soybean, _rapseed, _carbon,
             _mowi, _salmar,
-            _lice, _shrimp, _forward
+            _lice, _ila, _shrimp, _forward
         ]:
 
             w = w.copy()
