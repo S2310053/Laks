@@ -381,6 +381,7 @@ class featureEngineer:
     #
     def buildFeatureMatrix(self,
                            data: pd.DataFrame,
+                           raw: pd.DataFrame = None,
                            smolt_lag: int = 65) -> pd.DataFrame:
 
         df   = data.copy()
@@ -406,9 +407,11 @@ class featureEngineer:
         # ── 1. AR term: Δln spot lag-1 ────────────────────────────────────────
         out["Salmon (NOK/KG) 1w"] = _dln(spot).shift(1)
 
-        # ── 2. FP–SSB spread (deferred) ───────────────────────────────────────
-        if "Salmon_NOK_kg_SSB_Weekly" in df.columns:
-            out["Spread (FP - SSB)"] = _ln(spot / df["Salmon_NOK_kg_SSB_Weekly"])
+        # ── 2. FP–SSB spread (deferred) — uses unlagged SSB for contemporaneous basis
+        _ssb_source = raw if raw is not None else df
+        if "Salmon_NOK_kg_SSB_Weekly" in _ssb_source.columns:
+            _ssb_unlagged = _ssb_source["Salmon_NOK_kg_SSB_Weekly"].values
+            out["Spread (FP - SSB)"] = _ln(spot / pd.Series(_ssb_unlagged, index=df.index))
 
         # ── 3–6. Forward bases: ln(F_Mn / Spot) ──────────────────────────────
         for label, col in [("FWD 1m",  "Salmon_Forward_M1_Weekly"),
