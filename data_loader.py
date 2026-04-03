@@ -27,9 +27,11 @@ class DataLoader:
     SALMON_EXPORTS         = _salmon + _salmonMarket + "Exports.xlsx"
     SALMON_BIOMASS         = _salmon + _salmonMarket + "Biomass.xlsx"
     SALMON_ESCAPES         = _salmon + _salmonMarket + "Escapes.xlsx"
-    SALMON_LICE            = _salmon + "/sealice_norway_weekly.xlsx"
+    SALMON_LICE            = _salmon + _salmonMarket + "sealice_norway_weekly.xlsx"
+    SALMON_ILA             = _salmon + "/ila_pd.csv"
+    
     CPI_NORWAY             = _salmon + _salmonMarket + "CPI_YOY.xlsx"
-
+    PROTEIN_SHRIMP_PRICE   = _protein + "GlobalShrimpPrice.xlsx"
     PROTEIN_CPI_MEAT       = _protein + "CPI_Meat.xlsx"
     PROTEIN_PRICE_BROILER  = _protein + "Price_Broiler.xlsx"
     PROTEIN_PRICE_PIG      = _protein + "Price_Pig.xlsx"
@@ -41,12 +43,13 @@ class DataLoader:
     COMMODITY_WHEAT        = _commodity + "Price_Wheat.xlsx"
     COMMODITY_SOYBEAN      = _commodity + "Price_Soybean.xlsx"
     COMMODITY_RAPSEED      = _commodity + "Price_Rapseed.xlsx"
-
-    ##
     COMMODITY_CARBON       = _commodity + "Price_Carbon.xlsx"
 
     EQUITY_PRICE_MOWI      = _salmon + _salmonEquity + "Price_MOWI.xlsx"
     EQUITY_PRICE_SALMAR    = _salmon + _salmonEquity + "Price_SALMAR.xlsx"
+
+    SALMON_FORWARD_OLD     = _salmon + _salmonMarket + "Forwardprices_20062024.csv"
+    SALMON_FORWARD_NEW     = _salmon + _salmonMarket + "Forwardprices_20252026.csv"
 
     def __init__(self):
         pass
@@ -392,19 +395,24 @@ class DataLoader:
         ## Clean
         _fileName   = self.SALMON_LICE
         _data       = pd.read_excel(_fileName)
+        # ICA column may not exist in older Excel files — add it as zero if missing
+        if "ICA Count (ISA)" not in _data.columns:
+            _data["ICA Count (ISA)"] = 0
         _selectCols = ["Year", "Week",
                        "Localities Reporting",
                        "Avg Adult Female Lice",
                        "Avg Sea Temp 3m (°C)",
                        "% Above Limit (0.5)",
-                       "% Any Treatment"]
+                       "% Any Treatment",
+                       "ICA Count (ISA)"]
         dataClean         = _data[_selectCols].copy()
         dataClean.columns = ["Year", "Week",
                              "Salmon_Lice_LocalitiesReporting_Weekly",
                              "Salmon_Lice_AvgFemale_Weekly",
                              "Salmon_SeaTemp_3m_Weekly",
                              "Salmon_Lice_PctAboveLimit_Weekly",
-                             "Salmon_Lice_PctTreated_Weekly"]
+                             "Salmon_Lice_PctTreated_Weekly",
+                             "Salmon_Lice_ICA_Count_Weekly"]
 
         ## Derive Month from ISO week
         dataClean["Month"] = pd.to_datetime(
@@ -421,7 +429,8 @@ class DataLoader:
                                    "Salmon_Lice_AvgFemale_Weekly",
                                    "Salmon_SeaTemp_3m_Weekly",
                                    "Salmon_Lice_PctAboveLimit_Weekly",
-                                   "Salmon_Lice_PctTreated_Weekly"]].copy()
+                                   "Salmon_Lice_PctTreated_Weekly",
+                                   "Salmon_Lice_ICA_Count_Weekly"]].copy()
         dataTransform = dataTransform.astype({
             "Year"                                   : "int64",
             "Week"                                   : "int64",
@@ -431,10 +440,72 @@ class DataLoader:
             "Salmon_SeaTemp_3m_Weekly"               : "float64",
             "Salmon_Lice_PctAboveLimit_Weekly"        : "float64",
             "Salmon_Lice_PctTreated_Weekly"          : "float64",
+            "Salmon_Lice_ICA_Count_Weekly"           : "float64",
         })
 
         assert not dataTransform.duplicated(subset=["Year", "Week"]).any(), \
             "SalmonLice has duplicate (Year, Week) rows"
+
+        return dataTransform
+
+    ##
+    #  Counts the number of unique salmon localities with an active ILA
+    #  (Infectious Salmon Anemia) case in each ISO week.
+    #  A locality is "active" in week W if:
+    #      Fra dato  ≤  last day of week W
+    #      AND (Til dato is NaN  OR  Til dato ≥ first day of week W)
+    #  @dataset BarentsWatch / Mattilsynet — ila_pd.csv (full event log)
+    #  @return  weekly count of unique ILA localities (Year, Week, Month,
+    #           Salmon_ILA_ActiveLocalities_Weekly)
+    #
+    def SalmonILA(self):
+
+        _data = pd.read_csv(self.SALMON_ILA, sep=",", encoding="utf-8-sig")
+
+        ## Filter ILA only
+        _ila = _data[_data["Sykdom"] == "ILA"].copy()
+
+        ## Parse dates — Fra dato is always present; Til dato may be NaN (still active)
+        _ila["Fra dato"] = pd.to_datetime(_ila["Fra dato"], errors="coerce")
+        _ila["Til dato"] = pd.to_datetime(_ila["Til dato"], errors="coerce")
+
+        ## Build a weekly calendar from the earliest event to today (Wednesday anchors)
+        _minDate = _ila["Fra dato"].min()
+        _weeks   = pd.date_range(
+            start = _minDate - pd.Timedelta(days=_minDate.weekday()),  # back to Monday
+            end   = pd.Timestamp.today(),
+            freq  = "W-WED"
+        )
+
+        ## For each Wednesday, count unique localities active that week
+        _records = []
+        for _wed in _weeks:
+            _mon = _wed - pd.Timedelta(days=2)   # Monday of the same ISO week
+            _sun = _wed + pd.Timedelta(days=4)   # Sunday of the same ISO week
+
+            _active = _ila[
+                (_ila["Fra dato"] <= _sun) &
+                (_ila["Til dato"].isna() | (_ila["Til dato"] >= _mon))
+            ]["Lokalitetsnummer"].nunique()
+
+            _iso   = _wed.isocalendar()
+            _records.append({
+                "Year":  int(_iso[0]),
+                "Week":  int(_iso[1]),
+                "Month": int(_wed.month),
+                "Salmon_ILA_ActiveLocalities_Weekly": int(_active)
+            })
+
+        dataTransform = pd.DataFrame(_records)
+        dataTransform = dataTransform.astype({
+            "Year":  "int64",
+            "Week":  "int64",
+            "Month": "int64",
+            "Salmon_ILA_ActiveLocalities_Weekly": "float64"
+        })
+
+        assert not dataTransform.duplicated(subset=["Year", "Week"]).any(), \
+            "SalmonILA has duplicate (Year, Week) rows"
 
         return dataTransform
 
@@ -694,6 +765,148 @@ class DataLoader:
         )
 
     ##
+    #  Uploads, cleans and transforms the Global Shrimp Price time series
+    #  From January 1992 to February 2026
+    #  @dataset FRED series PSHRIUSDM — IMF Primary Commodity Prices, Shrimp
+    #  @return  weekly shrimp price per metric ton in USD (forward-filled from monthly)
+    #
+    def ProteinGlobalShrimpPrice(self):
+
+        ## Clean
+        _fileName = self.PROTEIN_SHRIMP_PRICE
+        _data     = pd.read_excel(_fileName, sheet_name="Monthly", header=0)
+        dataClean = _data.copy()
+        dataClean["observation_date"] = pd.to_datetime(dataClean["observation_date"])
+        dataClean = dataClean.sort_values("observation_date").reset_index(drop=True)
+        dataClean = dataClean.rename(columns={
+            "observation_date": "Date",
+            "PSHRIUSDM"       : "Protein_Shrimp_USD_mt_Weekly"
+        })
+
+        ## Transform: forward-fill monthly to weekly Wednesday
+        dataTransform = (
+            dataClean
+            .set_index("Date")
+            .resample("W-WED")
+            .ffill()
+            .reset_index()
+        )
+
+        dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
+        dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+        dataTransform = dataTransform[["Year", "Week", "Month", "Protein_Shrimp_USD_mt_Weekly"]]
+        dataTransform = dataTransform.astype({
+            "Year" : "int64",
+            "Week" : "int64",
+            "Month": "int64",
+            "Protein_Shrimp_USD_mt_Weekly": "float64"
+        })
+
+        return dataTransform
+
+    ##
+    #  Uploads, cleans and transforms FishPool salmon forward prices
+    #  Two source files: 2006-2025 (NOK/kg) and 2024-2026 (EUR/tonne).
+    #  The EUR/tonne file is converted to NOK/kg using the EURNOK rate on each
+    #  closing date, then the two files are merged into a single series.
+    #  Old file takes precedence where both overlap (Sep 2024 – Jan 2025).
+    #  @dataset FishPool — All Fish Pool forward prices
+    #  @return  weekly M+1, M+3, M+6, M+12 salmon forward prices in NOK/kg
+    #
+    def SalmonForwardPrice(self):
+
+        _horizons = {1: "M1", 3: "M3", 6: "M6", 12: "M12"}
+
+        def _extractHorizons(df, value_col):
+            df = df.copy()
+            df["ClosingDate"] = pd.to_datetime(df["Closing Date"])
+            df["Year"]        = df["Year"].astype(int)
+            df["Month"]       = df["Month"].astype(int)
+            df[value_col]     = pd.to_numeric(df[value_col], errors="coerce")
+
+            df["Horizon"] = (
+                (df["Year"]  - df["ClosingDate"].dt.year)  * 12
+                + (df["Month"] - df["ClosingDate"].dt.month)
+            )
+            df = df[df["Horizon"].isin(_horizons.keys())]
+
+            pivot = df.pivot_table(
+                index="ClosingDate",
+                columns="Horizon",
+                values=value_col,
+                aggfunc="last"
+            )
+            pivot.columns = [f"Salmon_Forward_{_horizons[h]}_Weekly" for h in pivot.columns]
+            return pivot.reset_index()
+
+        ## --- Load daily EURNOK rates for EUR/tonne → NOK/kg conversion ---
+        _eurnok = pd.read_excel(self.CURRENCY_EURNOK, sheet_name="Sheet1", header=0)
+        _eurnok["Date"] = pd.to_datetime(_eurnok["Date"])
+        _eurnok = _eurnok.sort_values("Date").rename(columns={"Last Price": "EURNOK"})
+
+        ## --- Old file: 2006–Jan 2025, values already in NOK/kg ---
+        _dfOld = pd.read_csv(self.SALMON_FORWARD_OLD,
+                             sep=";", skiprows=1, decimal=",", index_col=False)
+        _dfOld = _dfOld.dropna(axis=1, how="all")
+        _oldResult = _extractHorizons(_dfOld, "NOK Value")
+
+        ## --- New file: Sep 2024–Mar 2026, values in EUR/tonne ---
+        ##     Convert to NOK/kg: EUR/tonne × EURNOK / 1000
+        _dfNew = pd.read_csv(self.SALMON_FORWARD_NEW,
+                             sep=";", skiprows=1, decimal=",", index_col=False)
+        _dfNew = _dfNew.dropna(axis=1, how="all")
+        _dfNew["ClosingDate"] = pd.to_datetime(_dfNew["Closing Date"])
+        _dfNew["Value"]       = pd.to_numeric(_dfNew["Value"], errors="coerce")
+
+        _closingRates = pd.merge_asof(
+            _dfNew[["ClosingDate"]].drop_duplicates().sort_values("ClosingDate"),
+            _eurnok[["Date", "EURNOK"]],
+            left_on="ClosingDate", right_on="Date", direction="backward"
+        ).drop(columns="Date")
+
+        _dfNew = _dfNew.merge(_closingRates, on="ClosingDate")
+        _dfNew["Value"] = _dfNew["Value"] * _dfNew["EURNOK"] / 1000
+        _newResult = _extractHorizons(_dfNew, "Value")
+
+        ## --- Combine: old file where available, new file fills the rest ---
+        _fwdCols = [f"Salmon_Forward_{l}_Weekly" for l in ["M1", "M3", "M6", "M12"]]
+
+        dataDaily = pd.merge(_oldResult, _newResult,
+                             on="ClosingDate", how="outer",
+                             suffixes=("_old", "_new"))
+        dataDaily = dataDaily.sort_values("ClosingDate")
+
+        for col in _fwdCols:
+            dataDaily[col] = dataDaily[f"{col}_old"].fillna(dataDaily[f"{col}_new"])
+
+        dataDaily = dataDaily[["ClosingDate"] + _fwdCols]
+
+        ## --- Resample to weekly Wednesday ---
+        dataTransform = (
+            dataDaily
+            .set_index("ClosingDate")
+            .resample("W-WED")
+            .last()
+            .reset_index()
+        )
+        dataTransform = dataTransform.rename(columns={"ClosingDate": "Date"})
+        dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
+        dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+
+        dataTransform = dataTransform[["Year", "Week", "Month"] + _fwdCols]
+        dataTransform = dataTransform.astype({
+            "Year" : "int64",
+            "Week" : "int64",
+            "Month": "int64"
+        })
+        for col in _fwdCols:
+            dataTransform[col] = dataTransform[col].astype("float64")
+
+        return dataTransform
+
+    ##
     #  Generic loader for Bloomberg-style time series
     #  Converts data to weekly frequency aligned to Wednesday
     #
@@ -783,13 +996,8 @@ class DataLoader:
 
         ## Load datasets
         _data        = self.SalmonPriceFishPool()
-
         _salmonsb    = self.SalmonPriceSSB()
-        #_salmonbb    = self.SalmonPriceBloomberg()
         _escapes     = self.SalmonEscapes()
-
-        _broiler     = self.ProteinBroilerPrice()
-        _pig         = self.ProteinPigPrice()
 
         _eurnok      = self.EURNOK()
         _usdnok      = self.USDNOK()
@@ -798,19 +1006,22 @@ class DataLoader:
         _wheat       = self.CommodityWheatPrice()
         _soybean     = self.CommoditySoybeanPrice()
         _rapseed     = self.CommodityRapseedPrice()
-
-        #
         _carbon      = self.CommodityCarbonPrice()
 
         _mowi        = self.EquityMOWIPrice()
         _salmar      = self.EquitySALMARPrice()
 
         _cpi         = self.CPINorway()
+        _broiler     = self.ProteinBroilerPrice()
+        _pig         = self.ProteinPigPrice()
         _cpimeat     = self.ProteinCPIMeat()
         _biomass     = self.SalmonBiomass()
         _biomassCoh  = self.SalmonBiomassCohort()
         _exports     = self.SalmonExport()
         _lice        = self.SalmonLice()
+        _ila         = self.SalmonILA()
+        _shrimp      = self.ProteinGlobalShrimpPrice()
+        _forward     = self.SalmonForwardPrice()
 
         ## Create Date from FishPool (Wednesday of ISO week)
         _data["Date"] = pd.to_datetime(
@@ -829,8 +1040,11 @@ class DataLoader:
             + "-01"
         ).min()
 
-        ## Create continuous weekly calendar
-        start = pd.Timestamp("2000-01-05")
+        ## Create continuous weekly calendar.
+        ## Start 4 weeks before 2000-01-05 so _lagByPublication can shift
+        ## pre-calendar shrimp values (1992-1999) into the Jan 2000 rows.
+        ## The warm-up rows are trimmed inside _lagByPublication.
+        start = pd.Timestamp("1999-12-08")
         end   = pd.Timestamp("2026-03-31")
 
         calendar = pd.DataFrame({
@@ -856,7 +1070,7 @@ class DataLoader:
             _eurnok, _usdnok,
             _brent, _wheat, _soybean, _rapseed, _carbon,
             _mowi, _salmar,
-            _lice
+            _lice, _ila, _shrimp, _forward
         ]:
 
             w = w.copy()

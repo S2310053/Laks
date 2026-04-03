@@ -14,6 +14,7 @@ Setup:
 
 import requests
 import pandas as pd
+import time
 from datetime import date, timedelta
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -44,13 +45,29 @@ def get_token():
     return resp.json()["access_token"]
 
 
-def fetch_week(token, year, week):
-    url  = f"{API_BASE}/v2/geodata/fishhealth/locality/{year}/{week}"
-    resp = requests.post(url, json={}, headers={"Authorization": f"Bearer {token}"})
-    if resp.status_code == 204:
-        return []
-    resp.raise_for_status()
-    return resp.json()
+def fetch_week(token, year, week, retries=5):
+    url = f"{API_BASE}/v2/geodata/fishhealth/locality/{year}/{week}"
+    for attempt in range(retries):
+        try:
+            resp = requests.post(url, json={}, headers={"Authorization": f"Bearer {token}"}, timeout=30)
+            if resp.status_code == 204:
+                return []
+            resp.raise_for_status()
+            return resp.json()
+        except requests.exceptions.HTTPError as e:
+            if resp.status_code in (502, 503, 504) and attempt < retries - 1:
+                wait = 2 ** attempt
+                print(f"  [{year}-W{week:02d}] {resp.status_code} — retrying in {wait}s …")
+                time.sleep(wait)
+            else:
+                raise
+        except requests.exceptions.RequestException as e:
+            if attempt < retries - 1:
+                wait = 2 ** attempt
+                print(f"  [{year}-W{week:02d}] network error ({e}) — retrying in {wait}s …")
+                time.sleep(wait)
+            else:
+                raise
 
 
 def iter_yearweeks(start_year, start_week):
@@ -69,8 +86,50 @@ def safe_mean(values):
     return round(sum(clean) / len(clean), 4) if clean else None
 
 
+_STRUCTURE_PRINTED = False  # print once for discovery
+
+
+def _has_isa(locality):
+    """Return True if the locality is suspected or confirmed with ISA (ICA)."""
+    # Check diseases array — entries can be strings or dicts
+    diseases = locality.get("diseases") or []
+    if isinstance(diseases, list):
+        for d in diseases:
+            if isinstance(d, str):
+                s = d.lower()
+                if "isa" in s or "ica" in s:
+                    return True
+            elif isinstance(d, dict):
+                name = str(d.get("name", "") or d.get("disease", "") or "").lower()
+                code = str(d.get("code", "") or d.get("diseaseCode", "") or "").lower()
+                if "isa" in name or "ica" in name or "isa" in code or "ica" in code:
+                    return True
+
+    # Flat boolean / status fields some API versions expose
+    for key in ("hasIsa", "isaSuspected", "isaConfirmed", "hasICA", "icaSuspected"):
+        val = locality.get(key)
+        if val:
+            return True
+
+    # Check inside liceReport for nested flags
+    lr = locality.get("liceReport") or {}
+    for key in ("hasIsa", "isaSuspected", "isaConfirmed"):
+        if lr.get(key):
+            return True
+
+    return False
+
+
 def aggregate_week(year, week, localities):
     # v2 API: lice data is nested under "liceReport"
+    global _STRUCTURE_PRINTED
+    if not _STRUCTURE_PRINTED and localities:
+        import json
+        print("\n── First locality structure (for field discovery) ──")
+        print(json.dumps(localities[0], indent=2, default=str)[:2000])
+        print("────────────────────────────────────────────────────\n")
+        _STRUCTURE_PRINTED = True
+
     reported = [l for l in localities if (l.get("liceReport") or {}).get("hasReported")]
     if not reported:
         return None
@@ -102,6 +161,10 @@ def aggregate_week(year, week, localities):
     above_limit   = round(sum(1 for l in reported if l.get("isAboveThreshold")) / n * 100, 2) if n else None
     any_treatment = round(sum(1 for l in reported if has_treatment(l)) / n * 100, 2) if n else None
 
+    # ICA = Infectious Salmon Anemia (ISA): count of ALL localities (not just lice-reported)
+    # that are suspected or confirmed with ISA in this week
+    ica_count = sum(1 for l in localities if _has_isa(l))
+
     return {
         "year":                 year,
         "week":                 week,
@@ -111,6 +174,7 @@ def aggregate_week(year, week, localities):
         "avg_sea_temp_3m":       sea_temp,
         "pct_above_limit":       above_limit,
         "pct_any_treatment":     any_treatment,
+        "ica_count":             ica_count,
     }
 
 
@@ -142,6 +206,7 @@ def write_excel(rows, path):
         ("Avg Sea Temp 3m (°C)",    "avg_sea_temp_3m",       22),
         ("% Above Limit (0.5)",     "pct_above_limit",       20),
         ("% Any Treatment",         "pct_any_treatment",     20),
+        ("ICA Count (ISA)",         "ica_count",             18),
     ]
 
     # Header row
@@ -170,6 +235,7 @@ def write_excel(rows, path):
     pct_cols  = [7, 8]   # % Above Limit, % Any Treatment
     temp_cols = [6]      # Avg Sea Temp
     lice_cols = [5]      # Avg Adult Female Lice
+    int_cols  = [9]      # ICA Count
 
     for row_idx in range(2, len(df) + 2):
         for c in pct_cols:
@@ -178,6 +244,8 @@ def write_excel(rows, path):
             ws.cell(row=row_idx, column=c).number_format = '0.00'
         for c in lice_cols:
             ws.cell(row=row_idx, column=c).number_format = '0.0000'
+        for c in int_cols:
+            ws.cell(row=row_idx, column=c).number_format = '0'
 
     # Summary stats block to the right
     ws.cell(row=1,  column=10, value="Summary Statistics").font = Font(bold=True, name="Arial", size=10)
@@ -190,6 +258,8 @@ def write_excel(rows, path):
         ("Avg temp (all time)",   f"=AVERAGE(F2:F{len(df)+1})"),
         ("Avg % above limit",     f"=AVERAGE(G2:G{len(df)+1})"),
         ("Avg % any treatment",   f"=AVERAGE(H2:H{len(df)+1})"),
+        ("Total ICA weeks > 0",   f"=COUNTIF(I2:I{len(df)+1},\">0\")"),
+        ("Max ICA count",         f"=MAX(I2:I{len(df)+1})"),
     ]
     for i, (label, formula) in enumerate(stats, 2):
         ws.cell(row=i, column=10, value=label).font  = Font(bold=True, name="Arial", size=10)
@@ -232,7 +302,9 @@ def main():
     print(f"  Rows: {len(rows)}")
     print(f"  Columns: year, week, iso_week, localities_reporting,")
     print(f"           avg_adult_female_lice, avg_sea_temp_3m,")
-    print(f"           pct_above_limit, pct_any_treatment")
+    print(f"           pct_above_limit, pct_any_treatment, ica_count")
+    print(f"\nNOTE: If all ica_count values are 0, check the first locality")
+    print(f"  structure printed above and update _has_isa() with the correct field name.")
 
 
 if __name__ == "__main__":
