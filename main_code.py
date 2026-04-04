@@ -29,6 +29,11 @@ feature.validatePublicationLags(data)
 Factors = feature.buildFeatureMatrix(data)
 feature.validateFeatureMatrix(Factors)
 
+Factors = Factors[
+    (Factors["Date"] >= "2004-01-01") &
+    (Factors["Date"] <= "2025-12-31")
+].reset_index(drop=True)
+
 #print(data)
 #print(data.columns)
 #print(data.info())

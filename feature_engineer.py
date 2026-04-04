@@ -24,9 +24,10 @@ class featureEngineer:
     #  that real-time availability was confirmed (no shift needed).
     #
     _zeroWeek = {
-        "EURNOK_Weekly":                              0,   
-        "USDNOK_Weekly":                              0,   
-        "Protein_Pig_EUR_100_kg_Weekly":              0,   
+        "EURNOK_Weekly":                              0,
+        "USDNOK_Weekly":                              0,
+        "Protein_Pig_EUR_100_kg_Weekly":              0,
+        "Protein_Broiler_EUR_100_kg_Weekly":          0,   # EU Commission publishes Friday; W-WED resample snaps to following Wed (no extra lag needed)
         "Equity_MOWI_NOK_Weekly":                     0,
         "Equity_SALMAR_NOK_Weekly":                   0,
         "Commodity_Brent_COA_NOK_bbl_Weekly":         0,   
@@ -72,7 +73,6 @@ class featureEngineer:
     _oneWeek  = {
         "Salmon_NOK_kg_SSB_Weekly":                   1,   # SSB publishes following week
         "Salmon_Exported_Tons_SSB_Weekly":            1,
-        "Protein_Broiler_EUR_100_kg_Weekly":          1,   # EU Commission publishes following Wednesday
         "Salmon_Escapes_Rep_Escaped_Weekly":          1,   # 24h statutory reporting window
         "Salmon_Escapes_Recapture_Weekly":            1,
         "Salmon_Escapes_Avg_Wt_Grams_Weekly":         1,
@@ -381,7 +381,6 @@ class featureEngineer:
     #
     def buildFeatureMatrix(self,
                            data: pd.DataFrame,
-                           raw: pd.DataFrame = None,
                            smolt_lag: int = 65) -> pd.DataFrame:
 
         df   = data.copy()
@@ -407,11 +406,12 @@ class featureEngineer:
         # ── 1. AR term: Δln spot lag-1 ────────────────────────────────────────
         out["Salmon (NOK/KG) 1w"] = _dln(spot).shift(1)
 
-        # ── 2. FP–SSB spread (deferred) — uses unlagged SSB for contemporaneous basis
-        _ssb_source = raw if raw is not None else df
-        if "Salmon_NOK_kg_SSB_Weekly" in _ssb_source.columns:
-            _ssb_unlagged = _ssb_source["Salmon_NOK_kg_SSB_Weekly"].values
-            out["Spread (FP - SSB)"] = _ln(spot / pd.Series(_ssb_unlagged, index=df.index))
+        # ── 2. FP–SSB spread — reconstruct contemporaneous SSB by undoing the
+        #       1-week publication lag (shift(-1)), compute ln(FP_t / SSB_t),
+        #       then shift(1) so row t shows last week's spread (first available)
+        if "Salmon_NOK_kg_SSB_Weekly" in df.columns:
+            _ssb_contemp = df["Salmon_NOK_kg_SSB_Weekly"].shift(-1)
+            out["Spread (FP - SSB)"] = _ln(spot / _ssb_contemp).shift(1)
 
         # ── 3–6. Forward bases: ln(F_Mn / Spot) ──────────────────────────────
         for label, col in [("FWD 1m",  "Salmon_Forward_M1_Weekly"),
@@ -435,24 +435,56 @@ class featureEngineer:
         if "Salmon_Exported_Tons_SSB_Weekly" in df.columns:
             out["Export Volume"] = _dln(df["Salmon_Exported_Tons_SSB_Weekly"])
 
-        # ── 10–12. Biomass by age: ln-level ───────────────────────────────────
-        for label, col in [("Biomass (0 - 1)",  "Salmon_Biomass_Biomass_Kg_Age0_Monthly"),
-                            ("Biomass (1 - 2)",  "Salmon_Biomass_Biomass_Kg_Age1_Monthly"),
-                            ("Biomass (2+)",     "Salmon_Biomass_Biomass_Kg_Age2Plus_Monthly")]:
-            if col in df.columns:
-                out[label] = _ln(df[col])
+        # ── 10–11. Biomass (1-2) and (2+): MoM growth with January cohort correction
+        #
+        # Problem: age buckets are year-based (Age = obs_year - release_year), so
+        # on January 1st the entire cohort jumps up one bucket. A naive MoM ratio
+        # across December→January compares two completely different cohorts.
+        #
+        # Fix: in January (data published in late February), use the LOWER bucket's
+        # prior value as the denominator — tracking the actual cohort:
+        #   Biomass (1-2) Jan: ln(b12_jan / b01_dec)  — Age0 cohort moved up to Age1
+        #   Biomass (2+)  Jan: ln(b2p_jan / b12_dec)  — Age1 cohort moved up to Age2+
+        # All other months: standard MoM ln(x_t / x_{t-1})
+        #
+        # Biomass (0-1) is dropped — Smolt Release 65w covers the Age0 pipeline
+        b01 = "Salmon_Biomass_Biomass_Kg_Age0_Monthly"
+        b12 = "Salmon_Biomass_Biomass_Kg_Age1_Monthly"
+        b2p = "Salmon_Biomass_Biomass_Kg_Age2Plus_Monthly"
 
-        # ── 13. Biomass share Age2+ ───────────────────────────────────────────
-        c0, c1, c2 = ("Salmon_Biomass_Biomass_Kg_Age0_Monthly",
-                       "Salmon_Biomass_Biomass_Kg_Age1_Monthly",
-                       "Salmon_Biomass_Biomass_Kg_Age2Plus_Monthly")
-        if all(c in df.columns for c in [c0, c1, c2]):
-            out["Biomass Share 2+"] = df[c2] / (df[c0] + df[c1] + df[c2])
+        if all(c in df.columns for c in [b01, b12, b2p]):
+            _b01 = df[b01]
+            _b12 = df[b12]
+            _b2p = df[b2p]
+
+            # Detect January reference month: value changed AND calendar month is Feb
+            # (January biomass published ~Feb 23 after 20-day EOMONTH lag)
+            _jan_ref = (_b12 != _b12.shift(1)) & (df["Month"] == 2)
+
+            # Transition mask: weeks where a new monthly value first appears
+            _b12_changed = _b12 != _b12.shift(1)
+            _b2p_changed = _b2p != _b2p.shift(1)
+
+            # Biomass (1-2): compute ratio only at transitions, ffill within month
+            _denom_12 = _b12.shift(1).copy()
+            _denom_12[_jan_ref] = _b01.shift(1)[_jan_ref]
+            _denom_12[_denom_12 < 1e3] = np.nan
+            _ratio_12 = _ln(_b12 / _denom_12)
+            _ratio_12[~_b12_changed] = np.nan    # blank out non-transition weeks
+            out["Biomass (1 - 2) Monthly"] = _ratio_12.ffill()
+
+            # Biomass (2+): compute ratio only at transitions, ffill within month
+            _denom_2p = _b2p.shift(1).copy()
+            _denom_2p[_jan_ref] = _b12.shift(1)[_jan_ref]
+            _denom_2p[_denom_2p < 1e3] = np.nan
+            _ratio_2p = _ln(_b2p / _denom_2p)
+            _ratio_2p[~_b2p_changed] = np.nan    # blank out non-transition weeks
+            out["Biomass (2+) Monthly"] = _ratio_2p.ffill()
 
         # ── 14. Average weight kg/fish ────────────────────────────────────────
         if all(c in df.columns for c in ["Salmon_Biomass_Kg_Monthly",
                                           "Salmon_Biomass_Fish_Stock_Monthly"]):
-            out["Avg Weight (KG)"] = (df["Salmon_Biomass_Kg_Monthly"]
+            out["Avg Weight (KG) Monthly"] = (df["Salmon_Biomass_Kg_Monthly"]
                                       / df["Salmon_Biomass_Fish_Stock_Monthly"])
 
         # ── 15–18. Derived ratios ─────────────────────────────────────────────
@@ -460,10 +492,10 @@ class featureEngineer:
         stock = "Salmon_Biomass_Fish_Stock_Monthly"
 
         if all(c in df.columns for c in ["Salmon_Biomass_Feed_Kg_Monthly", bkg]):
-            out["FCR"] = df["Salmon_Biomass_Feed_Kg_Monthly"] / df[bkg]
+            out["FCR Monthly"] = df["Salmon_Biomass_Feed_Kg_Monthly"] / df[bkg]
 
         if all(c in df.columns for c in ["Salmon_Biomass_Harvest_Kg_Monthly", bkg]):
-            out["Harvest Intensity"] = df["Salmon_Biomass_Harvest_Kg_Monthly"] / df[bkg]
+            out["Harvest Intensity Monthly"] = df["Salmon_Biomass_Harvest_Kg_Monthly"] / df[bkg]
 
         loss_cols = ["Salmon_Biomass_Mortality_N_Monthly",
                      "Salmon_Biomass_Discard_N_Monthly",
@@ -471,20 +503,20 @@ class featureEngineer:
                      "Salmon_Biomass_Other_Loss_N_Monthly"]
         if all(c in df.columns for c in loss_cols + [stock]):
             total_loss = sum(df[c] for c in loss_cols)
-            out["Loss Rate"]     = total_loss / df[stock]
-            out["Mortality Rate"] = df["Salmon_Biomass_Mortality_N_Monthly"] / df[stock]
+            out["Loss Rate Monthly"]      = total_loss / df[stock]
+            out["Mortality Rate Monthly"] = df["Salmon_Biomass_Mortality_N_Monthly"] / df[stock]
 
         # ── 19. Smolt: ln-level, lagged smolt_lag weeks ───────────────────────
         if "Salmon_Biomass_Smolt_Releases_Monthly" in df.columns:
-            out["Smolt Release 65w"] = _ln(df["Salmon_Biomass_Smolt_Releases_Monthly"]).shift(smolt_lag)
+            out["Smolt Release 65w Monthly"] = _ln(df["Salmon_Biomass_Smolt_Releases_Monthly"]).shift(smolt_lag)
 
-        # ── 20. ILA: ln(1 + x) ────────────────────────────────────────────────
+        # ── 20. ILA: raw count ────────────────────────────────────────────────
         if "Salmon_ILA_ActiveLocalities_Weekly" in df.columns:
-            out["ISA Outbreak"] = np.log1p(df["Salmon_ILA_ActiveLocalities_Weekly"])
+            out["ISA Outbreak"] = df["Salmon_ILA_ActiveLocalities_Weekly"]
 
-        # ── 21. Sea lice: ln(1 + x) ───────────────────────────────────────────
+        # ── 21. Sea lice: raw avg female count ───────────────────────────────
         if "Salmon_Lice_AvgFemale_Weekly" in df.columns:
-            out["Lice Outbreak"] = np.log1p(df["Salmon_Lice_AvgFemale_Weekly"])
+            out["Lice Outbreak"] = df["Salmon_Lice_AvgFemale_Weekly"]
 
         # ── 22–23. Lice treatment & sea temperature ───────────────────────────
         if "Salmon_Lice_PctTreated_Weekly" in df.columns:
@@ -498,11 +530,15 @@ class featureEngineer:
 
         # ── 25. CPI Norway (level, already YoY %) ────────────────────────────
         if "CPI_Norway_Monthly" in df.columns:
-            out["CPI NO"] = df["CPI_Norway_Monthly"]
+            out["CPI NO Monthly"] = df["CPI_Norway_Monthly"]
 
-        # ── 26. Shrimp Δln ────────────────────────────────────────────────────
+        # ── 26. Shrimp Δln (monthly series — compute at transitions, ffill within month)
         if "Protein_Shrimp_USD_mt_Weekly" in df.columns:
-            out["Shrimp Price (Global)"] = _dln(df["Protein_Shrimp_USD_mt_Weekly"])
+            _shrimp = df["Protein_Shrimp_USD_mt_Weekly"]
+            _shrimp_changed = _shrimp != _shrimp.shift(1)
+            _shrimp_dln = _dln(_shrimp)
+            _shrimp_dln[~_shrimp_changed] = np.nan
+            out["Shrimp Price (Global) Monthly"] = _shrimp_dln.ffill()
 
         # ── 27–28. Competing proteins Δln ────────────────────────────────────
         for label, col in [("Broiler Price (EU)", "Protein_Broiler_EUR_100_kg_Weekly"),
@@ -512,7 +548,7 @@ class featureEngineer:
 
         # ── 29. Meat Inflation YoY (deferred) ────────────────────────────────
         if "Protein_Meat_Inflation_YoY_Monthly" in df.columns:
-            out["Meat CPI (EU)"] = df["Protein_Meat_Inflation_YoY_Monthly"]
+            out["Meat CPI (EU) Monthly"] = df["Protein_Meat_Inflation_YoY_Monthly"]
 
         # ── 30–41. Commodities: Δln C01/C03/C06, slope ln(C06/C01),
         #          curvature ln(C01) − 2·ln(C03) + ln(C06) ─────────────────────

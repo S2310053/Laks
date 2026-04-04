@@ -1108,10 +1108,12 @@ class DataLoader:
         data = data.drop(columns=["CalendarYear"])
         data = data.sort_values("Date").reset_index(drop=True)
 
-        ## Forwards fill only market price variables (not target, not volumes)
+        ## Forwards fill only weekly price variables that can have genuine gaps
+        ## (e.g. equity holidays). Commodity contracts are excluded — daily resample
+        ## already handles holiday weeks via .last(), so ffill only creates spurious zeros.
         _fillCols = data.columns[
             data.columns.str.contains(
-                "Commodity|Equity|EURNOK|USDNOK|Protein_Broiler|Protein_Pig"
+                "Equity|EURNOK|USDNOK|Protein_Broiler|Protein_Pig"
             )
         ]
 
