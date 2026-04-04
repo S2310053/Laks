@@ -481,6 +481,14 @@ class featureEngineer:
             _ratio_2p[~_b2p_changed] = np.nan    # blank out non-transition weeks
             out["Biomass (2+) Monthly"] = _ratio_2p.ffill()
 
+        # ── 13b. Total biomass MoM Δln (compute at transitions, ffill within month)
+        if "Salmon_Biomass_Kg_Monthly" in df.columns:
+            _tbio = df["Salmon_Biomass_Kg_Monthly"]
+            _tbio_changed = _tbio != _tbio.shift(1)
+            _tbio_dln = _dln(_tbio)
+            _tbio_dln[~_tbio_changed] = np.nan
+            out["Total Biomass Monthly"] = _tbio_dln.ffill()
+
         # ── 14. Average weight kg/fish ────────────────────────────────────────
         if all(c in df.columns for c in ["Salmon_Biomass_Kg_Monthly",
                                           "Salmon_Biomass_Fish_Stock_Monthly"]):
