@@ -7,6 +7,7 @@
 #
 from data_loader import DataLoader
 from feature_engineer import featureEngineer
+from eda import EDA
 
 import matplotlib
 matplotlib.use("TkAgg")
@@ -26,7 +27,7 @@ data = loadData.Data()
 loadData.ValidateData(data)
 data = feature._lagByPublication(data)
 feature.validatePublicationLags(data)
-Factors = feature.buildFeatureMatrix(data)
+Factors, freq_map = feature.buildFeatureMatrix(data)
 feature.validateFeatureMatrix(Factors)
 
 Factors = Factors[
@@ -34,10 +35,13 @@ Factors = Factors[
     (Factors["Date"] <= "2025-12-31")
 ].reset_index(drop=True)
 
+eda = EDA(Factors, freq_map=freq_map)
+eda.report()
+
 #print(data)
 #print(data.columns)
 #print(data.info())
 
 
-Factors.to_csv(r"/Users/fillipaskildsen/Documents/GitHub/Data/Factors.csv", index = False)
+#Factors.to_csv(r"/Users/fillipaskildsen/Documents/GitHub/Data/Factors.csv", index = False)
 

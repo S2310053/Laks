@@ -613,7 +613,18 @@ class featureEngineer:
             if all(c in df.columns for c in [c1, c6, c12]):
                 out[f"{label} FWD Curvature"] = _ln(df[c1]) - 2 * _ln(df[c6]) + _ln(df[c12])
 
-        return out.reset_index(drop=True)
+        out = out.reset_index(drop=True)
+
+        ## Build freq_map from column naming convention.
+        ## Columns ending in "Monthly" are broadcast monthly features — EDA must
+        ## downsample them to true monthly frequency before running statistical tests.
+        ## All other columns are treated as weekly.
+        freq_map = {
+            col: ("monthly" if col.endswith("Monthly") else "weekly")
+            for col in out.columns
+        }
+
+        return out, freq_map
 
     ##
     #   Validate the feature matrix produced by buildFeatureMatrix().

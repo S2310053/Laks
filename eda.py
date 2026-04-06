@@ -9,7 +9,7 @@
 #  Sections:
 #    2.1  Distribution Analysis      (histograms, JB test, QQ-plot)
 #    2.2  Stationarity Tests         (ADF + KPSS, decision table)
-#    2.3  Temporal Dependence        (ACF, PACF, Ljung-Box)
+#    2.3  Temporal Dependence        (ACF, PACF, Ljung-Box — y_t + all features)
 #    2.4  Granger Causality          (each feature vs y_t, SBIC-selected lag, maxlag=104wk/24mo=2yr)
 #    2.5  Cointegration              (Engle-Granger, Granger-filtered candidates)
 #    2.6  Heteroscedasticity/Volatility → Stage 3 (White, BG, ARCH-LM on actual OLS residuals)
@@ -21,6 +21,7 @@
 ##
 
 
+import warnings
 import pandas              as pd
 import numpy               as np
 import matplotlib.pyplot             as plt
@@ -34,6 +35,22 @@ from statsmodels.tsa.vector_ar.var_model  import VAR
 from statsmodels.stats.diagnostic          import acorr_ljungbox
 from statsmodels.stats.outliers_influence  import variance_inflation_factor
 from statsmodels.graphics.tsaplots         import plot_acf, plot_pacf
+from statsmodels.tools.sm_exceptions      import InterpolationWarning
+
+## KPSS p-values are bounded at [0.01, 0.10] in the statsmodels lookup table.
+## When the test statistic falls outside this range the actual p-value is beyond
+## the table boundary — the warning is expected and not a data error.
+warnings.filterwarnings("ignore", category=InterpolationWarning)
+
+## plot_acf / plot_pacf / acorr_ljungbox trigger a ValueWarning when the series
+## has an integer index instead of DatetimeIndex.  The statistics are unaffected;
+## statsmodels only needs the DatetimeIndex for out-of-sample forecasting, which
+## we do not use in EDA.
+warnings.filterwarnings(
+    "ignore",
+    message="An unsupported index was provided",
+    category=UserWarning,
+)
 
 ##
 #  EDA runs all Stage 2 diagnostics on the Factors feature matrix.
@@ -215,9 +232,19 @@ class EDA:
         print(f"        CatBoost is nonparametric — normality not required [GRA 6518, Lesson 10]")
 
         ## Jarque-Bera on features
+        ## NOTE on JB magnitude: the statistic is JB = T × (S²/6 + (K−3)²/24).
+        ## It scales linearly with sample size T.  With T≈1000 weekly obs and price
+        ## series in levels (structurally right-skewed, leptokurtic), JB routinely
+        ## reaches thousands — this is EXPECTED, not a data error.
+        ## Interpretation: rejection here signals that the feature needs log transformation
+        ## (confirmed by stationarity tests).  The policy-relevant JB test is on OLS
+        ## residuals in Stage 3 — after all transformations have been applied.
+        ## [Ref: GRA 6547, Ch 3, chapter_3-3_non-normality.R — JB formula and interpretation]
         print(f"\n── JARQUE-BERA (features) {'─'*46}")
-        print(f"  {'Column':<40}  {'JB stat':>10}  {'p-value':>10}  Result")
-        print(f"  {'─'*40}  {'─'*10}  {'─'*10}  ──────")
+        print(f"  [M]=monthly freq  [W]=weekly freq")
+        print(f"  ⚠ JB scales with T — high stats for level series are expected (needs log transform)")
+        print(f"  {'Column':<40}  {'JB stat':>10}  {'p-value':>10}  {'Skew':>6}  {'Kurt':>6}  Result")
+        print(f"  {'─'*40}  {'─'*10}  {'─'*10}  {'─'*6}  {'─'*6}  ──────")
 
         for col in self._valid_cols:
             ## Monthly columns: test on unique monthly values, not 4x-repeated weekly rows
@@ -226,11 +253,15 @@ class EDA:
                 else self.X.loc[self._fp_mask, col].dropna()
             if len(s) < 8:
                 continue
+            s        = pd.Series(s.values)   ## strip DatetimeIndex to avoid statsmodels index warning
             jb, p    = stats.jarque_bera(s)
             freq_tag = "[M]" if col in self._monthly_cols else "[W]"
+            skew     = s.skew()
+            kurt     = s.kurtosis() + 3      ## scipy kurtosis() returns excess; show raw kurtosis
             result   = "Non-normal" if p < 0.05 else "Normal"
             col_disp = (col[:36] + "..") if len(col) > 38 else col
-            print(f"  {col_disp:<38} {freq_tag}  {jb:>10.2f}  {p:>10.4f}  {result}")
+            print(f"  {col_disp:<38} {freq_tag}  {jb:>10.2f}  {p:>10.4f}  "
+                  f"{skew:>6.2f}  {kurt:>6.2f}  {result}")
 
         ## QQ-plot for y_t
         fig, ax = plt.subplots(figsize=(6, 5))
@@ -441,6 +472,53 @@ class EDA:
         except Exception as e:
             print(f"  ⚠ Ljung-Box failed — {type(e).__name__}: {e}")
 
+        ## Ljung-Box summary for all features
+        ## ACF/PACF plots for each feature are in the per-feature PDF (section 2.8).
+        ## This table gives a compact printable summary of whether each feature
+        ## has significant autocorrelation at the same economic horizons used for y_t.
+        ## Persistent autocorrelation in a level series → likely I(1) (confirms stationarity verdict).
+        ## [Ref: GRA 6547, Ch 5, slides 124-129 — ACF/PACF identification]
+        print(f"\n── LJUNG-BOX SUMMARY — ALL FEATURES ────────────────────────────────")
+        print(f"  p-values at reference lags.  * = significant at 5%.")
+        print(f"  [M] = monthly lags (1, 6, 12, 24 months)")
+        print(f"  [W] = weekly  lags (4, 26, 52, 104 weeks = 1mo, 6mo, 1yr, 2yr)")
+
+        ## Weekly header uses 4 lags; monthly uses 4 lags — same width, different units
+        print(f"\n  {'Column':<40}  {'Lag1':>7}  {'Lag2':>7}  {'Lag3':>7}  {'Lag4':>7}")
+        print(f"  {'─'*40}  {'─'*7}  {'─'*7}  {'─'*7}  {'─'*7}")
+
+        for col in self._valid_cols:
+            is_monthly  = col in self._monthly_cols
+            freq_tag    = "[M]" if is_monthly else "[W]"
+            lb_ref_lags = self._LAGS_MONTHLY if is_monthly else self._LAGS_WEEKLY
+
+            series = self._toMonthly(col) if is_monthly \
+                     else self.X.loc[self._fp_mask, col].dropna()
+            series = pd.Series(series.values)   ## strip DatetimeIndex
+
+            max_testable = len(series) - 1
+            valid_lags   = [l for l in lb_ref_lags if l < max_testable]
+            if len(valid_lags) < 1:
+                continue
+
+            try:
+                lb = acorr_ljungbox(series, lags=valid_lags, return_df=True)
+                p_vals = []
+                for l in lb_ref_lags:
+                    if l in valid_lags:
+                        pv   = lb.loc[l, "lb_pvalue"]
+                        flag = "*" if pv < 0.05 else " "
+                        p_vals.append(f"{pv:.3f}{flag}")
+                    else:
+                        p_vals.append("  N/A ")
+                col_disp = (col[:38] + "..") if len(col) > 40 else col
+                print(f"  {col_disp:<38} {freq_tag}  "
+                      + "  ".join(f"{v:>7}" for v in p_vals))
+            except Exception as e:
+                print(f"  ⚠ [{col}] LB failed — {type(e).__name__}: {e}")
+
+        print(f"\n  → Persistent significance across lags = likely I(1) — confirmed by stationarity tests")
+        print(f"  → ACF/PACF plots for each feature: see eda_feature_plots.pdf (section 2.8)")
         print(f"\n{self.SEP}\n")
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -542,7 +620,9 @@ class EDA:
                 ## At the min_obs boundary (e.g. T=60), it prevents evaluating VAR(52) on 8
                 ## effective observations — near-singular and degenerate BIC.
                 ## Spirit: course uses lag.max=10 on ~200 obs (T/p≈20) [chapter_6-1_var.R].
-                effective_maxlags = min(maxlags, max(1, len(combined) // 3))
+                ## statsmodels requires T > 3 × maxlags + 1 (neqs=2, trend="c").
+                ## Use (T − 2) // 3 so integer arithmetic never lands exactly on the boundary.
+                effective_maxlags = min(maxlags, max(1, (len(combined) - 2) // 3))
                 var_model = VAR(combined)
                 lag_order = var_model.select_order(maxlags=effective_maxlags)
                 p         = int(lag_order.bic)
@@ -813,21 +893,35 @@ class EDA:
             print(f"\n{self.SEP}\n")
             return pd.DataFrame()
 
-        ## High correlation pairs
-        corr       = X_fp.corr()
-        cols_list  = corr.columns.tolist()
-        high_pairs = []
+        ## Add y_t as the last column so the heatmap shows target correlations.
+        ## y_t is aligned to X_fp's index (same rows after listwise deletion).
+        ## Label it clearly so it stands out in the plot.
+        ## y_t is NOT included in VIF — VIF measures collinearity among regressors only.
+        _Y_LABEL  = "── y_t (target)"
+        y_aligned = self.y.loc[X_fp.index].rename(_Y_LABEL)
+        corr_full = pd.concat([X_fp, y_aligned], axis=1).corr()   ## includes y_t
+        corr_X    = X_fp.corr()                                    ## features only (for VIF + pairs)
 
+        ## High correlation pairs — features only (X-X), not X-y
+        cols_list  = corr_X.columns.tolist()
+        high_pairs = []
         for i in range(len(cols_list)):
             for j in range(i + 1, len(cols_list)):
-                rho = corr.iloc[i, j]
+                rho = corr_X.iloc[i, j]
                 if abs(rho) > 0.9:
                     high_pairs.append((cols_list[i], cols_list[j], round(rho, 3)))
+
+        ## Feature-target correlations — printed separately for interpretability
+        feat_target = (
+            corr_full[_Y_LABEL]
+            .drop(index=_Y_LABEL)           ## drop y_t's self-correlation (1.0)
+            .sort_values(key=abs, ascending=False)
+        )
 
         ## Multicollinearity inflates Var(β̂) for OLS via (X'X)⁻¹.
         ## [Ref: GRA 6547, Ch 3 — multicollinearity and its effect on OLS variance]
         ## [Ref: GRA 6518, Lesson 6, slide 7 — correlated inputs inflate (X'X)⁻¹]
-        print(f"\n── HIGH CORRELATION PAIRS  (|ρ| > 0.9) ─────────────────────────────")
+        print(f"\n── HIGH CORRELATION PAIRS  (|ρ| > 0.9, features only) ───────────────")
         if high_pairs:
             for c1, c2, rho in high_pairs:
                 print(f"  ρ={rho:>6}  {c1}  ↔  {c2}")
@@ -837,11 +931,24 @@ class EDA:
         else:
             print(f"  None found")
 
-        ## Correlation heatmap
-        fig, ax = plt.subplots(figsize=(16, 13))
-        sns.heatmap(corr, cmap="RdBu_r", center=0, vmin=-1, vmax=1,
+        ## Feature-target correlations — ranked by |ρ|
+        ## Useful for understanding sign and magnitude of raw linear association with y_t.
+        ## Does NOT replace Granger (which accounts for lags and y's own history),
+        ## but complements it as a quick direction check.
+        print(f"\n── FEATURE-TARGET CORRELATIONS  ρ(feature, y_t) ────────────────────")
+        print(f"  Ranked by |ρ|.  Sign shows direction of raw linear association.")
+        print(f"  {'Column':<42}  {'ρ':>7}")
+        print(f"  {'─'*42}  {'─'*7}")
+        for col, rho in feat_target.items():
+            col_disp = (col[:40] + "..") if len(col) > 42 else col
+            print(f"  {col_disp:<42}  {rho:>7.4f}")
+
+        ## Correlation heatmap — includes y_t as the last row/column
+        ## Sorted so y_t appears at the bottom for easy reading
+        fig, ax = plt.subplots(figsize=(16, 14))
+        sns.heatmap(corr_full, cmap="RdBu_r", center=0, vmin=-1, vmax=1,
                     ax=ax, annot=False, linewidths=0.3)
-        ax.set_title("Feature Correlation Matrix")
+        ax.set_title("Correlation Matrix — Features + y_t (target in last row/column)")
         plt.tight_layout()
         plt.savefig("eda_correlation_matrix.pdf")
         plt.close()

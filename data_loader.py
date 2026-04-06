@@ -464,7 +464,7 @@ class DataLoader:
     #
     def SalmonILA(self):
 
-        _data = pd.read_csv(self.SALMON_ILA, sep=",", encoding="utf-8-sig")
+        _data = pd.read_csv(self.SALMON_ILA, sep=",", encoding="utf-8-sig", low_memory=False)
 
         ## Filter ILA only
         _ila = _data[_data["Sykdom"] == "ILA"].copy()
