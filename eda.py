@@ -10,8 +10,8 @@
 #    2.1  Distribution Analysis      (histograms, JB test, QQ-plot)
 #    2.2  Stationarity Tests         (ADF + KPSS, decision table)
 #    2.3  Temporal Dependence        (ACF, PACF, Ljung-Box)
-#    2.4  Granger Causality          (each feature vs y_t, SBIC-selected lag, maxlag=52wk/12mo=1yr)
-#    2.5  Cointegration              (Engle-Granger + ARDL bounds test)
+#    2.4  Granger Causality          (each feature vs y_t, SBIC-selected lag, maxlag=104wk/24mo=2yr)
+#    2.5  Cointegration              (Engle-Granger, Granger-filtered candidates)
 #    2.6  Heteroscedasticity/Volatility → Stage 3 (White, BG, ARCH-LM on actual OLS residuals)
 #    2.7  Multicollinearity          (correlation matrix, VIF)
 #    2.8  plotAllFeatures            (PDF: time series / histogram+normal / ACF / PACF per feature)
@@ -34,8 +34,6 @@ from statsmodels.tsa.vector_ar.var_model  import VAR
 from statsmodels.stats.diagnostic          import acorr_ljungbox
 from statsmodels.stats.outliers_influence  import variance_inflation_factor
 from statsmodels.graphics.tsaplots         import plot_acf, plot_pacf
-import statsmodels.api                     as sm
-
 
 ##
 #  EDA runs all Stage 2 diagnostics on the Factors feature matrix.
@@ -57,28 +55,20 @@ class EDA:
     _TARGET = "Salmon (NOK/KG)"
 
     ## Lag reference structure — consistent across ALL tests in this class.
-    ## Economic horizons: 1 month, 6 months, 1 year.
-    ## Weekly and monthly frequencies map to the same economic periods.
+    ## Economic horizon: 24 months (104 weeks) — covers the full salmon production
+    ## cycle of 14–22 months from smolt release to harvest.
     ##
     ##   Economic period │ Weekly lag │ Monthly lag
     ##   ────────────────┼────────────┼────────────
     ##   1 month         │     4      │      1
     ##   6 months        │    26      │      6
     ##   1 year          │    52      │     12
+    ##   2 years         │   104      │     24
     ##
-    ## Used by: Ljung-Box (temporalDependence), plotAllFeatures ACF annotation.
+    ## Used by: Ljung-Box (temporalDependence), Granger maxlags, plotAllFeatures ACF/PACF.
     ## White's, BG, and ARCH-LM run in Stage 3 on actual OLS residuals.
-    _LAGS_WEEKLY  = [4, 26, 52]   ## 1mo, 6mo, 1yr in weeks
-    _LAGS_MONTHLY = [1,  6, 12]   ## 1mo, 6mo, 1yr in months
-
-    ## Pesaran et al. (2001) bounds test critical values
-    ## Case III: unrestricted intercept, no trend, k=1
-    ## [I(0) lower bound, I(1) upper bound]
-    _PESARAN_CV = {
-        "10%": [4.04, 4.78],
-        "5%":  [4.94, 5.73],
-        "1%":  [6.84, 7.84],
-    }
+    _LAGS_WEEKLY  = [4, 26, 52, 104]   ## 1mo, 6mo, 1yr, 2yr in weeks
+    _LAGS_MONTHLY = [1,  6, 12,  24]   ## 1mo, 6mo, 1yr, 2yr in months
 
     SEP = "═" * 72
 
@@ -412,11 +402,11 @@ class EDA:
         T       = len(y_clean)
         print(f"\n  Sample: {T} observations (FishPool period)\n")
 
-        ## ACF / PACF plots up to lag 52
+        ## ACF / PACF plots up to lag 104 (2 years — full salmon production cycle)
         fig, axes = plt.subplots(2, 1, figsize=(12, 7))
         try:
-            plot_acf( y_clean, lags=52, ax=axes[0], title="ACF  — y_t log return (up to lag 52)")
-            plot_pacf(y_clean, lags=52, ax=axes[1], title="PACF — y_t log return (up to lag 52)")
+            plot_acf( y_clean, lags=104, ax=axes[0], title="ACF  — y_t log return (up to lag 104 = 2yr)")
+            plot_pacf(y_clean, lags=104, ax=axes[1], title="PACF — y_t log return (up to lag 104 = 2yr)")
             plt.tight_layout()
             plt.savefig("eda_acf_pacf_y.pdf")
             print(f"  Saved: eda_acf_pacf_y.pdf")
@@ -429,7 +419,7 @@ class EDA:
         ## [Ref: GRA 6547, Ch 5, slides 124–129 — ACF and PACF in Box-Jenkins methodology]
         print(f"  → ACF identifies MA order; PACF identifies AR order (Box-Jenkins) [GRA 6547, Ch 5, slides 124–129]")
 
-        ## Ljung-Box at _LAGS_WEEKLY = [4, 26, 52] → 1mo, 6mo, 1yr
+        ## Ljung-Box at _LAGS_WEEKLY = [4, 26, 52, 104] → 1mo, 6mo, 1yr, 2yr
         ## Consistent with the lag reference structure used across all EDA tests.
         ## Q* = T(T+2) Σ_{k=1}^{m} (τ̂²_k / (T−k)) ~ χ²(m) under H₀ of no autocorrelation.
         ## [Ref: GRA 6547, Ch 5, slide 128 — Ljung-Box Q* statistic]
@@ -437,7 +427,7 @@ class EDA:
 
         print(f"\n── LJUNG-BOX TEST ───────────────────────────────────────────────────")
         print(f"  H₀: no autocorrelation up to lag k")
-        print(f"  Lags: 4=1mo  26=6mo  52=1yr (weekly, consistent lag structure)")
+        print(f"  Lags: 4=1mo  26=6mo  52=1yr  104=2yr (weekly, salmon lifecycle horizon)")
         print(f"  {'Lag':>4}  {'Q-stat':>10}  {'p-value':>10}  Result")
         print(f"  {'─'*4}  {'─'*10}  {'─'*10}  ──────")
 
@@ -462,7 +452,7 @@ class EDA:
     #  FishPool period only.
     #
     #  Lag selection: bivariate VAR with SBIC (BIC) criterion.
-    #  maxlag = 52wk (weekly) or 12mo (monthly) = 1-year horizon for both frequencies.
+    #  maxlag = 104wk (weekly) or 24mo (monthly) = 2-year horizon (salmon lifecycle).
     #  SBIC selects ONE lag per pair — avoids data snooping from looping over lags
     #  and picking the best p-value.
     #  [Ref: GRA 6547, Ch 6, chapter_6-1_var.R — VARselect(SBIC) → VAR(p) → causality()]
@@ -479,9 +469,9 @@ class EDA:
         ## Rejection means x Granger-causes y: lagged x adds predictive power beyond y's own lags.
         ## [Ref: GRA 6547, Ch 6, slide 196 — Granger causality as F-test on lagged x coefficients]
         print(f"\n  H₀: lagged X does not predict y beyond y's own lags")
-        print(f"  Lag selected by SBIC via bivariate VAR (maxlag=52wk / 12mo = 1yr)")
+        print(f"  Lag selected by SBIC via bivariate VAR (maxlag=104wk / 24mo = 2yr)")
         print(f"  F-test on joint significance of lagged x coefficients [GRA 6547, Ch 6, slide 196]\n")
-        print(f"  [M]=monthly freq (maxlag=12mo=1yr)  [W]=weekly freq (maxlag=52wk=1yr)")
+        print(f"  [M]=monthly freq (maxlag=24mo=2yr)  [W]=weekly freq (maxlag=104wk=2yr)")
         print(f"  Monthly x uses monthly y (Σ weekly log returns).  Lag unit shown explicitly.")
         print(f"  {'Column':<38}  {'Lag':>6}  {'F-stat':>8}  {'p-value':>8}  Result")
         print(f"  {'─'*38}  {'─'*6}  {'─'*8}  {'─'*8}  ──────")
@@ -497,21 +487,22 @@ class EDA:
             ## inflating the VAR F-statistic.
             ##
             ## maxlags: consistent 1-year economic horizon for both frequencies
-            ##   Weekly:  maxlags=52 → lag 52 = 1 year
-            ##   Monthly: maxlags=12 → lag 12 = 1 year
+            ##   Weekly:  maxlags=104 → lag 104 = 2 years (full salmon production cycle)
+            ##   Monthly: maxlags=24  → lag 24  = 2 years
+            ## Horizon justified by salmon lifecycle: 14–22 months smolt-to-harvest.
             ## [Ref: GRA 6547, Ch 6, chapter_6-1_var.R — VARselect(lag.max=maxlags, type="const")]
             if col in self._monthly_cols:
                 x_series  = self._toMonthly(col)
                 y_series  = self._yToMonthly()
-                maxlags   = 12   ## 12 months = 1 year
-                min_obs   = 36   ## minimum 36 monthly obs (~3 years) for VAR — matches cointegration threshold
+                maxlags   = 24   ## 24 months = 2 years
+                min_obs   = 36   ## minimum 36 monthly obs (~3 years) for VAR
                 freq_tag  = "[M]"
                 lag_unit  = "mo"
             else:
                 x_series  = self.X.loc[self._fp_mask, col]
                 y_series  = self.y.loc[self._fp_mask]
-                maxlags   = 52   ## 52 weeks = 1 year
-                min_obs   = 60   ## minimum 60 weekly obs (~1 year) for VAR
+                maxlags   = 104  ## 104 weeks = 2 years
+                min_obs   = 60   ## minimum 60 weekly obs for VAR
                 freq_tag  = "[W]"
                 lag_unit  = "wk"
 
@@ -622,28 +613,68 @@ class EDA:
     # ─────────────────────────────────────────────────────────────────────────
 
     ##
-    #  Engle-Granger cointegration and ARDL bounds test.
+    #  Engle-Granger cointegration test following GRA 6547, Ch 7 procedure.
+    #  [Ref: chapter_7-2_cointegration_ecm.R — OLS in levels → ADF on residuals → ECM]
     #
-    #  Runs ADF on ALL valid features. Those that fail ADF (I(1)) are tested
-    #  pairwise for cointegration — cointegration requires both series to be I(1),
-    #  so y (log return, I(0)) is not used here.
+    #  Candidates: Granger-significant I(1) features from Stage 2.4.
+    #  Pairs tested: salmon log price level ~ each candidate.
     #
-    #  If cointegrated: construct ECM term z_{t-1} = X_{t-1} - β̂·W_{t-1}
-    #  and add to Stage 1 FeatureEngineer.
+    #  Restricting to Granger-significant features avoids all-pairs multiple testing
+    #  while remaining data-driven (no industry knowledge required).
+    #  Justification: if x does not Granger-cause y, a long-run relationship between
+    #  their levels is unlikely to improve salmon return forecasts.
     #
-    #  @return  DataFrame with EG and ARDL results per pair
+    #  @param granger_df  DataFrame from grangerCausality() — filters candidates to
+    #                     Granger-significant features. If None, all I(1) features used.
+    #  @return  DataFrame with EG results per pair
     #
-    def cointegration(self) -> pd.DataFrame:
+    def cointegration(self, granger_df: pd.DataFrame = None) -> pd.DataFrame:
 
         print(f"\n{self.SEP}")
-        print(f"  2.5  COINTEGRATION ANALYSIS")
+        print(f"  2.5  COINTEGRATION ANALYSIS  (Engle-Granger two-step)")
         print(f"{self.SEP}")
+        print(f"  [Ref: GRA 6547, Ch 7, chapter_7-2_cointegration_ecm.R]")
 
-        ## Step 1: identify I(1) features — fail ADF on ALL valid features
-        ## Monthly columns downsampled to true monthly frequency (same as stationarityTests)
-        ## to avoid inflated T from broadcast repetition distorting the unit root test.
+        ## Reconstruct salmon log price level.
+        ## y_t = Δln(P_t) → ln(P_t) = cumsum(y_t) + constant (constant irrelevant for cointegration).
+        ## ADF confirms I(1) — price levels almost always fail to reject unit root.
+        _SALMON_LVL = "__SalmonLogLevel"
+        _y_dated    = (
+            pd.DataFrame({
+                "Date": self._factors.loc[self._fp_mask, "Date"],
+                "val" : self.y.loc[self._fp_mask],
+            })
+            .dropna().set_index("Date")["val"]
+        )
+        salmon_lvl_w = _y_dated.cumsum()
+        salmon_lvl_m = salmon_lvl_w.resample("ME").last()
+
+        try:
+            _, _adf_p_lvl, *_ = adfuller(salmon_lvl_w, autolag="AIC", regression="c")
+            if _adf_p_lvl < 0.05:
+                print(f"  ⚠ Salmon log price level ADF p={_adf_p_lvl:.4f} — stationary, cointegration skipped")
+                print(f"\n{self.SEP}\n")
+                return pd.DataFrame()
+            print(f"  Salmon log price level: ADF p={_adf_p_lvl:.4f} — I(1) ✓")
+        except Exception as e:
+            print(f"  ⚠ ADF on salmon log price level failed — {e}")
+            print(f"\n{self.SEP}\n")
+            return pd.DataFrame()
+
+        ## Step 1: restrict candidates to Granger-significant features, then confirm I(1).
+        ## Granger filter: if x does not predict y in the short run, testing its long-run
+        ## relationship with salmon price levels adds no forecasting value.
+        ## [Ref: GRA 6547, Ch 6, slide 196 — Granger causality as predictive relevance filter]
+        if granger_df is not None and not granger_df.empty:
+            sig_cols   = set(granger_df[granger_df["p_value"] < 0.05]["Column"].tolist())
+            candidates = [c for c in self._valid_cols if c in sig_cols]
+            print(f"\n  Candidates: {len(candidates)} Granger-significant features (filtered from {len(self._valid_cols)} valid)")
+        else:
+            candidates = self._valid_cols
+            print(f"\n  No granger_df supplied — using all {len(candidates)} valid features as candidates")
+
         i1_cols = []
-        for col in self._valid_cols:
+        for col in candidates:
             series  = self._toMonthly(col) if col in self._monthly_cols \
                       else self.X.loc[self._fp_mask, col].dropna()
             min_obs = 12 if col in self._monthly_cols else 52
@@ -654,189 +685,81 @@ class EDA:
                 if adf_p >= 0.05:
                     i1_cols.append(col)
             except Exception as e:
-                print(f"  ⚠ [{col}] ADF (Step 1) failed — {type(e).__name__}: {e}")
-                continue
+                print(f"  ⚠ [{col}] ADF failed — {type(e).__name__}: {e}")
 
-        print(f"\n  Note: y is a log return (I(0)) — cointegration requires I(1) pairs")
-        print(f"  ADF run on all {len(self._valid_cols)} valid features")
         print(f"  I(1) candidates (ADF p ≥ 0.05): {len(i1_cols)}")
         for c in i1_cols:
             print(f"    · {c}")
 
-        if len(i1_cols) < 2:
-            print(f"\n  Need at least 2 I(1) features for cointegration — skipped")
+        if not i1_cols:
+            print(f"\n  No I(1) candidates — cointegration skipped")
             print(f"\n{self.SEP}\n")
             return pd.DataFrame()
 
-        ## Step 2: test all I(1) pairs
+        ## Step 2: EG test — salmon log level ~ each I(1) candidate.
+        ## Procedure (GRA 6547, Ch 7, chapter_7-2_cointegration_ecm.R):
+        ##   1. OLS in levels: ln(Salmon_t) = α + β·ln(X_t) + û_t
+        ##   2. ADF on û_t using MacKinnon critical values (statsmodels.tsa.stattools.coint)
+        ##      Standard ADF critical values are too liberal for estimated residuals.
+        ##      [Ref: GRA 6547, Ch 7, slide 245 — MacKinnon response surfaces]
+        ##   3. Reject H₀ (p < 0.05) → cointegrated → construct ECM term
+        print(f"\n── ENGLE-GRANGER  (MacKinnon critical values) ───────────────────────")
+        print(f"  H₀: no cointegration  |  Pair: salmon log level ~ X")
+        print(f"  {'X Feature':<45}  {'EG stat':>8}  {'p-value':>8}  Result")
+        print(f"  {'─'*45}  {'─'*8}  {'─'*8}  ──────")
+
         results = []
-        pairs   = [(i1_cols[i], i1_cols[j])
-                   for i in range(len(i1_cols))
-                   for j in range(i + 1, len(i1_cols))]
+        for x_col in i1_cols:
 
-        ## Engle-Granger: OLS in levels → ADF on residuals using MacKinnon critical values.
-        ## Standard ADF critical values are too liberal for estimated residuals —
-        ## MacKinnon response surfaces account for the number of variables in the regression.
-        ## [Ref: GRA 6547, Ch 7, slides 215–262 — Engle-Granger two-step procedure]
-        ## [Ref: GRA 6547, Ch 7, slide 245 — MacKinnon critical values for cointegration residuals]
-        ##
-        ## Multiple testing: with N_pairs tests at α=5%, expected false positives = N_pairs × 0.05.
-        ## Results are exploratory — confirm candidate pairs with ARDL before acting.
-        ##
-        ## Direction: coint(A, B) ≠ coint(B, A) — EG regresses A on B and tests residuals.
-        ## Pair order follows list position, not economic logic. Use ARDL (symmetric) to validate
-        ## any EG finding, and verify the ECM adjustment coefficient sign in Stage 1.
-        n_expected_fp = round(len(pairs) * 0.05, 1)
-        print(f"\n── ENGLE-GRANGER (MacKinnon critical values) — {len(pairs)} pairs ──────"
-              f"  [~{n_expected_fp} false positives expected at 5%]")
-        print(f"  {'Pair':<55}  {'EG stat':>8}  {'p-value':>8}  Result")
-        print(f"  {'─'*55}  {'─'*8}  {'─'*8}  ──────")
-
-        for y_col, x_col in pairs:
-
-            ## Downsample to monthly if either column is broadcast-monthly,
-            ## to avoid inflated T (same logic as stationarityTests / grangerCausality).
-            ## min_obs: 36 months (~3yr) for monthly pairs; 52 weeks (1yr) for weekly pairs.
-            ## _toMonthly() used for BOTH columns in a mixed pair — it sets the Date column
-            ## as the index before resampling, which works regardless of self.X's index type.
-            pair_is_monthly = (y_col in self._monthly_cols) or (x_col in self._monthly_cols)
-            if pair_is_monthly:
-                y_ser    = self._toMonthly(y_col)
-                x_ser    = self._toMonthly(x_col)
-                combined = pd.DataFrame({"y": y_ser, "x": x_ser}).dropna()
-                min_obs  = 36
-            else:
-                combined = pd.DataFrame({
-                    "y": self.X.loc[self._fp_mask, y_col],
-                    "x": self.X.loc[self._fp_mask, x_col],
-                }).dropna()
-                min_obs  = 52
+            ## Downsample to monthly if X is a broadcast-monthly column.
+            pair_is_monthly = x_col in self._monthly_cols
+            salmon_ser      = salmon_lvl_m if pair_is_monthly else salmon_lvl_w
+            x_ser           = self._toMonthly(x_col) if pair_is_monthly \
+                              else self.X.loc[self._fp_mask, x_col]
+            combined        = pd.DataFrame({"y": salmon_ser, "x": x_ser}).dropna()
+            min_obs         = 36 if pair_is_monthly else 52
 
             if len(combined) < min_obs:
-                print(f"  ⚠ [{y_col[:25]} ~ {x_col[:25]}] skipped — "
-                      f"{len(combined)} obs < min {min_obs}")
+                print(f"  ⚠ [{x_col[:43]}] skipped — {len(combined)} obs < min {min_obs}")
                 continue
 
-            y_lvl = combined["y"].values
-            x_lvl = combined["x"].values
-
             try:
-                eg_stat, eg_p, _ = coint(y_lvl, x_lvl)
+                eg_stat, eg_p, _ = coint(combined["y"].values, combined["x"].values)
                 eg_result        = "Cointegrated ✓" if eg_p < 0.05 else "Not cointegrated"
             except Exception as e:
                 eg_stat, eg_p, eg_result = None, None, f"Error: {e}"
 
-            pair_str = f"{y_col[:25]} ~ {x_col[:26]}"
+            col_disp = (x_col[:41] + "..") if len(x_col) > 43 else x_col
             if eg_stat is not None:
-                print(f"  {pair_str:<55}  {eg_stat:>8.4f}  {eg_p:>8.4f}  {eg_result}")
+                print(f"  {col_disp:<45}  {eg_stat:>8.4f}  {eg_p:>8.4f}  {eg_result}")
             else:
-                print(f"  {pair_str:<55}  {'N/A':>8}  {'N/A':>8}  {eg_result}")
-
-            ardl_res = self._ardlBoundsTest(y_lvl, x_lvl)
+                print(f"  {col_disp:<45}  {'N/A':>8}  {'N/A':>8}  {eg_result}")
 
             results.append({
-                "Y_col"       : y_col,
-                "X_col"       : x_col,
-                "EG_stat"     : round(eg_stat, 4) if eg_stat is not None else None,
-                "EG_p"        : round(eg_p,    4) if eg_p    is not None else None,
-                "EG_result"   : eg_result,
-                "ARDL_F"      : ardl_res.get("F_stat"),
-                "ARDL_result" : ardl_res.get("result"),
+                "X_col"    : x_col,
+                "EG_stat"  : round(eg_stat, 4) if eg_stat is not None else None,
+                "EG_p"     : round(eg_p,    4) if eg_p    is not None else None,
+                "EG_result": eg_result,
             })
 
-        ## ARDL results
-        print(f"\n── ARDL BOUNDS TEST  (Pesaran 2001, Case III, k=1) ──────────────────")
-        print(f"  Critical values (5%): I(0)=4.94  I(1)=5.73")
-        print(f"  {'Pair':<55}  {'F-stat':>8}  Result")
-        print(f"  {'─'*55}  {'─'*8}  ──────")
-        for r in results:
-            pair_str = f"{r['Y_col'][:25]} ~ {r['X_col'][:26]}"
-            f_disp   = f"{r['ARDL_F']:>8.4f}" if r["ARDL_F"] is not None else "     N/A"
-            print(f"  {pair_str:<55}  {f_disp}  {r['ARDL_result']}")
-
-        coint_found = [r for r in results if r["EG_result"] == "Cointegrated ✓"
-                       or (r["ARDL_F"] is not None and r["ARDL_F"] > self._PESARAN_CV["5%"][1])]
-
+        coint_found = [r for r in results if r["EG_result"] == "Cointegrated ✓"]
         print(f"\n  → {len(coint_found)} cointegrated pair(s) found")
         if coint_found:
-            print(f"  → Construct ECM term: z_{{t-1}} = Y_{{t-1}} − β̂·X_{{t-1}}")
+            print(f"  → ECM term: z_{{t-1}} = ln(Salmon_{{t-1}}) − β̂·ln(X_{{t-1}})")
             print(f"  → Add z_{{t-1}} to FeatureEngineer (Stage 1)")
-            ## In Δy_t = α + β₂z_{t-1} + ... + u_t, β₂ must be negative.
-            ## If z_{t-1}>0 (Y above long-run equilibrium), ΔY should be negative (price reverts down).
-            ## β₂ ≥ 0 → ECM not working → cointegrating relationship may be spurious.
+            ## Sign constraint: β₂ < 0 in Δy_t = α + β₂·z_{t-1} + ...
+            ## z_{t-1} > 0 means salmon is above long-run equilibrium → next return negative.
+            ## β₂ ≥ 0 → no mean reversion → relationship may be spurious → drop term.
             ## [Ref: GRA 6547, Ch 7, slide 250 — sign constraint on adjustment coefficient]
-            print(f"  → Verify adjustment coefficient β₂ < 0 (mean-reversion required) [GRA 6547, Ch 7, slide 250]")
+            print(f"  → Verify β₂ < 0 in Stage 3 OLS (mean-reversion required) [GRA 6547, Ch 7, slide 250]")
+            for r in coint_found:
+                print(f"       · {r['X_col']}")
         else:
-            print(f"  → No cointegration confirmed")
+            print(f"  → No cointegration confirmed — difference all I(1) features in Stage 1")
 
         print(f"\n{self.SEP}\n")
 
         return pd.DataFrame(results)
-
-    ##
-    #  Private: ARDL bounds test for one (y, x) pair.
-    #  Estimates UECM via OLS, tests H₀: δ_y = 0 AND δ_x = 0 (no long-run relation).
-    #  Works for I(0), I(1), or mixed integration orders — does NOT require pre-testing.
-    #  [Ref: Pesaran, Shin & Smith (2001), Journal of Applied Econometrics — bounds test]
-    #
-    #  Short-run lag order: fixed at p=q=1 (one lag of Δy and one of Δx).
-    #  Pesaran (2001) recommends AIC/BIC selection for the short-run dynamics,
-    #  but selecting lags from data for each of 50+ pairs before testing would be
-    #  a form of data snooping — the lag chosen to whiten residuals best also
-    #  tends to minimise the F-statistic. Fixed p=q=1 is a pre-committed,
-    #  theory-neutral choice consistent with the parsimonious UECM specification.
-    #  Limitation: if the true short-run order is higher, residuals may be
-    #  autocorrelated → F-test size distortion. Check residual ACF if suspicious.
-    #
-    #  @param y_arr  numpy array — level series of y
-    #  @param x_arr  numpy array — level series of x
-    #  @return dict with F_stat and result string
-    #
-    def _ardlBoundsTest(self, y_arr: np.ndarray, x_arr: np.ndarray) -> dict:
-
-        ## UECM needs at least: 2 diffs + 1 lag of each diff = 3 rows minimum,
-        ## but OLS with 5 regressors needs well more. 10 is a conservative floor.
-        if len(y_arr) < 10:
-            return {"F_stat": None, "result": "Insufficient obs (need ≥10)"}
-
-        try:
-            ## UECM: Δy_t = c + δ_y y_{t-1} + δ_x x_{t-1} + φ Δy_{t-1} + γ Δx_{t-1} + u_t
-            dy    = np.diff(y_arr)
-            dx    = np.diff(x_arr)
-            y_lag = y_arr[:-1]
-            x_lag = x_arr[:-1]
-
-            n = len(dy) - 1
-            Y = dy[1:]
-            X = np.column_stack([
-                np.ones(n),
-                y_lag[1:],   ## δ_y: lagged level of y
-                x_lag[1:],   ## δ_x: lagged level of x
-                dy[:-1],     ## short-run Δy
-                dx[:-1],     ## short-run Δx
-            ])
-
-            model  = sm.OLS(Y, X).fit()
-
-            ## F-test: H₀: δ_y = 0, δ_x = 0
-            R       = np.zeros((2, X.shape[1]))
-            R[0, 1] = 1
-            R[1, 2] = 1
-            f_test  = model.f_test((R, np.zeros(2)))
-            f_stat  = round(float(np.squeeze(f_test.fvalue)), 4)
-
-            cv = self._PESARAN_CV
-            if f_stat > cv["5%"][1]:
-                conclusion = "Cointegration ✓ (F > I(1) bound, 5%)"
-            elif f_stat < cv["5%"][0]:
-                conclusion = "No cointegration (F < I(0) bound, 5%)"
-            else:
-                conclusion = "Inconclusive (within bounds)"
-
-            return {"F_stat": f_stat, "result": conclusion}
-
-        except Exception as e:
-            return {"F_stat": None, "result": f"Error: {e}"}
 
     # ─────────────────────────────────────────────────────────────────────────
     # 2.6  HETEROSCEDASTICITY & VOLATILITY — MOVED TO STAGE 3
@@ -939,7 +862,10 @@ class EDA:
         print(f"  {'Column':<40}  {'VIF':>8}  Flag")
         print(f"  {'─'*40}  {'─'*8}  ────")
 
-        X_vif       = sm.add_constant(X_fp)
+        X_vif       = pd.DataFrame(
+                          np.column_stack([np.ones(len(X_fp)), X_fp.values]),
+                          columns=["const"] + X_fp.columns.tolist()
+                      )
         vif_results = []
 
         for i, col in enumerate(X_vif.columns):
@@ -977,8 +903,8 @@ class EDA:
     #    Top (full width) — time series (full history, FishPool shaded, ADF/KPSS annotated)
     #    Bottom left      — histogram + fitted normal overlay (JB annotated)
     #                       [Ref: GRA Quant Risk, Assignment1.R — hist + dnorm overlay]
-    #    Bottom centre    — ACF up to lag 52wk / 12mo (Ljung-Box annotated)
-    #    Bottom right     — PACF up to lag 52wk / 12mo
+    #    Bottom centre    — ACF up to lag 104wk / 24mo (Ljung-Box annotated)
+    #    Bottom right     — PACF up to lag 104wk / 24mo
     #                       [Ref: GRA Rsrch Meth Ch5, chapter_5-2_acf_and_pacf.R]
     #
     #  ADF, KPSS, and JB test statistics are annotated directly on each page
@@ -1018,8 +944,8 @@ class EDA:
 
                 is_monthly = col in self._monthly_cols
                 freq_tag   = "[Monthly]" if is_monthly else "[Weekly]"
-                ## max_lag consistent with _LAGS_MONTHLY/_LAGS_WEEKLY maximum (1-year horizon)
-                max_lag    = 12 if is_monthly else 52
+                ## max_lag consistent with _LAGS_MONTHLY/_LAGS_WEEKLY maximum (2-year horizon)
+                max_lag    = 24 if is_monthly else 104
 
                 ## Series for plotting
                 series_full = self.X[col]
@@ -1097,8 +1023,8 @@ class EDA:
                     lb_lag   = self._LAGS_MONTHLY        ## [1, 6, 12]
                     lag_note = "lag 1=1mo | 6=6mo | 12=1yr"
                 else:
-                    lb_lag   = self._LAGS_WEEKLY         ## [4, 26, 52]
-                    lag_note = "lag 4=1mo | 26=6mo | 52=1yr"
+                    lb_lag   = self._LAGS_WEEKLY         ## [4, 26, 52, 104]
+                    lag_note = "lag 4=1mo | 26=6mo | 52=1yr | 104=2yr"
 
                 if len(clean) >= max_lag + 2:
                     try:
@@ -1177,7 +1103,7 @@ class EDA:
         stat_df = self.stationarityTests()
         self.temporalDependence()
         gc_df   = self.grangerCausality()
-        self.cointegration()
+        self.cointegration(granger_df=gc_df)
         self.multicollinearity()
         self.plotAllFeatures(stat_df=stat_df)
 
