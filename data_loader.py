@@ -44,12 +44,16 @@ class DataLoader:
     COMMODITY_SOYBEAN      = _commodity + "Price_Soybean.xlsx"
     COMMODITY_RAPSEED      = _commodity + "Price_Rapseed.xlsx"
     COMMODITY_CARBON       = _commodity + "Price_Carbon.xlsx"
+    COMMODITY_FISHMEAL     = _commodity + "Price_Fishmeal.xlsx"
 
     EQUITY_PRICE_MOWI      = _salmon + _salmonEquity + "Price_MOWI.xlsx"
     EQUITY_PRICE_SALMAR    = _salmon + _salmonEquity + "Price_SALMAR.xlsx"
 
     SALMON_FORWARD_OLD     = _salmon + _salmonMarket + "Forwardprices_20062024.csv"
     SALMON_FORWARD_NEW     = _salmon + _salmonMarket + "Forwardprices_20252026.csv"
+    SALMON_FORWARD_BBG     = _salmon + _salmonMarket + "Forward_Prices_Bloomberg.xlsx"
+    SALMON_NIBOR           = _salmon + _salmonMarket + "NIBOR.xlsx"
+    SALMON_CHILE_EXPORTS   = _salmon + _salmonMarket + "Exports_Chile.xlsx"
 
     def __init__(self):
         pass
@@ -592,27 +596,83 @@ class DataLoader:
     #  Uploads, cleans and transforms the Broiler Price EU time series data
     #  From 06 January 2012 to 09 February 2026
     #  @dataset from bloomberg ticker POPRBREU, source European Comission
-    #  @return  weekly price in EUR per 100 kg
+    #  @return  weekly price in NOK per 100 kg (converted at actual observation-date
+    #           EURNOK rate before resampling to Wednesday)
     #
     def ProteinBroilerPrice(self):
 
-        return self._loadWeekly(
-            self.PROTEIN_PRICE_BROILER,
-            "Protein_Broiler_EUR_100_kg_Weekly", freq="weekly"
+        _data = pd.read_excel(self.PROTEIN_PRICE_BROILER, header=0)
+        _data["Date"] = pd.to_datetime(_data["Date"])
+        _data = _data.sort_values("Date").reset_index(drop=True)
+        _data = _data.rename(columns={"Last Price": "Broiler_EUR"})
+
+        _eurnok = pd.read_excel(self.CURRENCY_EURNOK, header=0)
+        _eurnok["Date"] = pd.to_datetime(_eurnok["Date"])
+        _eurnok = _eurnok.sort_values("Date").reset_index(drop=True)
+        _eurnok.columns = ["Date", "EURNOK"]
+
+        _data = pd.merge_asof(_data, _eurnok, on="Date", direction="nearest")
+        _data["Protein_Broiler_EUR_100_kg_Weekly"] = _data["Broiler_EUR"] * _data["EURNOK"]
+
+        dataTransform = (
+            _data[["Date", "Protein_Broiler_EUR_100_kg_Weekly"]]
+            .set_index("Date")
+            .resample("W-WED")
+            .last()
+            .reset_index()
         )
-    
+
+        dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
+        dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+        dataTransform = dataTransform[["Year", "Week", "Month", "Protein_Broiler_EUR_100_kg_Weekly"]]
+        dataTransform = dataTransform.astype({
+            "Year": "int64", "Week": "int64", "Month": "int64",
+            "Protein_Broiler_EUR_100_kg_Weekly": "float64"
+        })
+
+        return dataTransform
+
     ##
     #  Uploads, cleans and transforms the Pig Price EU time series data
     #  From 03 January 2014 to 27 February 2026
     #  @dataset from bloomberg ticker EUPGCEDE, source European Comission
-    #  @return  weekly price in EUR per 100 kg
+    #  @return  weekly price in NOK per 100 kg (converted at actual observation-date
+    #           EURNOK rate before resampling to Wednesday)
     #
     def ProteinPigPrice(self):
 
-        return self._loadWeekly(
-            self.PROTEIN_PRICE_PIG,
-            "Protein_Pig_EUR_100_kg_Weekly", freq = "weekly"
+        _data = pd.read_excel(self.PROTEIN_PRICE_PIG, header=0)
+        _data["Date"] = pd.to_datetime(_data["Date"])
+        _data = _data.sort_values("Date").reset_index(drop=True)
+        _data = _data.rename(columns={"Last Price": "Pig_EUR"})
+
+        _eurnok = pd.read_excel(self.CURRENCY_EURNOK, header=0)
+        _eurnok["Date"] = pd.to_datetime(_eurnok["Date"])
+        _eurnok = _eurnok.sort_values("Date").reset_index(drop=True)
+        _eurnok.columns = ["Date", "EURNOK"]
+
+        _data = pd.merge_asof(_data, _eurnok, on="Date", direction="nearest")
+        _data["Protein_Pig_EUR_100_kg_Weekly"] = _data["Pig_EUR"] * _data["EURNOK"]
+
+        dataTransform = (
+            _data[["Date", "Protein_Pig_EUR_100_kg_Weekly"]]
+            .set_index("Date")
+            .resample("W-WED")
+            .last()
+            .reset_index()
         )
+
+        dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
+        dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+        dataTransform = dataTransform[["Year", "Week", "Month", "Protein_Pig_EUR_100_kg_Weekly"]]
+        dataTransform = dataTransform.astype({
+            "Year": "int64", "Week": "int64", "Month": "int64",
+            "Protein_Pig_EUR_100_kg_Weekly": "float64"
+        })
+
+        return dataTransform
 
     ##
     #  Uploads, cleans and transforms the EURNOK time series data
@@ -657,8 +717,8 @@ class DataLoader:
             "Commodity_Brent_CO3_NOK_bbl_Weekly",
             "Commodity_Brent_CO4_NOK_bbl_Weekly",
             "Commodity_Brent_CO5_NOK_bbl_Weekly",
-            "Commodity_Brent_CO6_NOK_bbl_Weekly"], freq= "daily"
-
+            "Commodity_Brent_CO6_NOK_bbl_Weekly",
+            "Commodity_Brent_CO12_NOK_bbl_Weekly"], freq= "daily"
         )
 
     ##
@@ -677,8 +737,8 @@ class DataLoader:
             "Commodity_Wheat_CA3_NOK_mt_Weekly",
             "Commodity_Wheat_CA4_NOK_mt_Weekly",
             "Commodity_Wheat_CA5_NOK_mt_Weekly",
-            "Commodity_Wheat_CA6_NOK_mt_Weekly"], freq= "daily"
-
+            "Commodity_Wheat_CA6_NOK_mt_Weekly",
+            "Commodity_Wheat_CA12_NOK_mt_Weekly"], freq= "daily"
         )
 
     ##
@@ -697,7 +757,8 @@ class DataLoader:
             "Commodity_Soybean_SM3_NOK_st_Weekly",
             "Commodity_Soybean_SM4_NOK_st_Weekly",
             "Commodity_Soybean_SM5_NOK_st_Weekly",
-            "Commodity_Soybean_SM6_NOK_st_Weekly"], freq = "daily"
+            "Commodity_Soybean_SM6_NOK_st_Weekly",
+            "Commodity_Soybean_SM12_NOK_st_Weekly"], freq = "daily"
         )
     
     ##
@@ -716,7 +777,8 @@ class DataLoader:
             "Commodity_Rapeseed_IJ3_NOK_mt_Weekly",
             "Commodity_Rapeseed_IJ4_NOK_mt_Weekly",
             "Commodity_Rapeseed_IJ5_NOK_mt_Weekly",
-            "Commodity_Rapeseed_IJ6_NOK_mt_Weekly"], freq = "daily"
+            "Commodity_Rapeseed_IJ6_NOK_mt_Weekly",
+            "Commodity_Rapeseed_IJ12_NOK_mt_Weekly"], freq = "daily"
         )
     
     ##
@@ -765,10 +827,147 @@ class DataLoader:
         )
 
     ##
+    #  Uploads, cleans and transforms the NIBOR 3m rate
+    #  From January 2000 onwards — daily, no publication lag
+    #  @dataset Bloomberg — NIBOR 3m interbank rate
+    #  @return  weekly Wednesday NIBOR 3m rate (raw %)
+    #
+    def NIBOR3m(self):
+
+        _data = pd.read_excel(self.SALMON_NIBOR, sheet_name="NIBOR3M", header=0)
+        _data["Date"] = pd.to_datetime(_data["Date"])
+        _data = _data.sort_values("Date").set_index("Date")
+        _data = _data.rename(columns={"Last Price": "NIBOR_3m_Weekly"})
+
+        dataTransform = (
+            _data
+            .resample("W-WED")
+            .last()
+            .reset_index()
+        )
+
+        dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
+        dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+        dataTransform = dataTransform[["Year", "Week", "Month", "NIBOR_3m_Weekly"]]
+        dataTransform = dataTransform.astype({
+            "Year": "int64", "Week": "int64", "Month": "int64",
+            "NIBOR_3m_Weekly": "float64"
+        })
+
+        return dataTransform
+
+    ##
+    #  Uploads, cleans and transforms Chilean salmon export volume
+    #  Calendar-dated (~every 8 days), 1-week publication lag
+    #  @dataset Chilean customs / Bloomberg
+    #  @return  weekly export value in NOK millions (converted at actual observation-date
+    #           FX rate before resampling to Wednesday, so price and FX always share the
+    #           same raw date)
+    #
+    def SalmonChileExports(self):
+
+        _data = pd.read_excel(self.SALMON_CHILE_EXPORTS, header=0)
+        _data["Date"] = pd.to_datetime(_data["Date"])
+        _data = _data.sort_values("Date").reset_index(drop=True)
+        _data = _data.rename(columns={"Last Price": "Chile_USD"})
+
+        ## Load USDNOK and convert at the actual observation date
+        _usdnok = pd.read_excel(self.CURRENCY_USDNOK, header=0)
+        _usdnok["Date"] = pd.to_datetime(_usdnok["Date"])
+        _usdnok = _usdnok.sort_values("Date").reset_index(drop=True)
+        _usdnok.columns = ["Date", "USDNOK"]
+
+        _data = pd.merge_asof(
+            _data.sort_values("Date"),
+            _usdnok.sort_values("Date"),
+            on="Date",
+            direction="nearest"
+        )
+        _data["Salmon_Chile_Export_Volume_Weekly"] = _data["Chile_USD"] * _data["USDNOK"]
+
+        dataTransform = (
+            _data[["Date", "Salmon_Chile_Export_Volume_Weekly"]]
+            .set_index("Date")
+            .resample("W-WED")
+            .last()
+            .ffill(limit=1)
+            .reset_index()
+        )
+
+        dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
+        dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+        dataTransform = dataTransform[["Year", "Week", "Month", "Salmon_Chile_Export_Volume_Weekly"]]
+        dataTransform = dataTransform.astype({
+            "Year" : "int64",
+            "Week" : "int64",
+            "Month": "int64",
+            "Salmon_Chile_Export_Volume_Weekly": "float64"
+        })
+
+        return dataTransform
+
+    ##
+    #  Uploads, cleans and transforms the Fishmeal Price time series
+    #  From January 2000 to February 2026
+    #  @dataset Bloomberg — monthly fishmeal spot price (end-of-month)
+    #  @return  weekly fishmeal price in NOK/mt (converted at publication-date FX,
+    #           then forward-filled so the NOK price stays flat within each month)
+    #
+    def CommodityFishmeelPrice(self):
+
+        ## Clean
+        _fileName = self.COMMODITY_FISHMEAL
+        _data     = pd.read_excel(_fileName, header=0)
+        dataClean = _data.copy()
+        dataClean["Date"] = pd.to_datetime(dataClean["Date"])
+        dataClean = dataClean.sort_values("Date").reset_index(drop=True)
+        dataClean = dataClean.rename(columns={"Last Price": "Fishmeal_USD"})
+
+        ## Load USDNOK and take the rate on the publication date (end-of-month)
+        _usdnok = pd.read_excel(self.CURRENCY_USDNOK, header=0)
+        _usdnok["Date"] = pd.to_datetime(_usdnok["Date"])
+        _usdnok = _usdnok.sort_values("Date").reset_index(drop=True)
+        _usdnok.columns = ["Date", "USDNOK"]
+
+        ## Convert to NOK at the publication date using merge_asof
+        dataClean = pd.merge_asof(
+            dataClean.sort_values("Date"),
+            _usdnok.sort_values("Date"),
+            on="Date",
+            direction="nearest"
+        )
+        dataClean["Commodity_Fishmeal_USD_mt_Weekly"] = dataClean["Fishmeal_USD"] * dataClean["USDNOK"]
+
+        ## Transform: forward-fill monthly NOK price to weekly Wednesday
+        dataTransform = (
+            dataClean[["Date", "Commodity_Fishmeal_USD_mt_Weekly"]]
+            .set_index("Date")
+            .resample("W-WED")
+            .ffill()
+            .reset_index()
+        )
+
+        dataTransform["Year"]  = dataTransform["Date"].dt.isocalendar().year
+        dataTransform["Week"]  = dataTransform["Date"].dt.isocalendar().week
+        dataTransform["Month"] = dataTransform["Date"].dt.month
+        dataTransform = dataTransform[["Year", "Week", "Month", "Commodity_Fishmeal_USD_mt_Weekly"]]
+        dataTransform = dataTransform.astype({
+            "Year" : "int64",
+            "Week" : "int64",
+            "Month": "int64",
+            "Commodity_Fishmeal_USD_mt_Weekly": "float64"
+        })
+
+        return dataTransform
+
+    ##
     #  Uploads, cleans and transforms the Global Shrimp Price time series
     #  From January 1992 to February 2026
     #  @dataset FRED series PSHRIUSDM — IMF Primary Commodity Prices, Shrimp
-    #  @return  weekly shrimp price per metric ton in USD (forward-filled from monthly)
+    #  @return  weekly shrimp price in NOK/mt (converted at publication-date FX,
+    #           then forward-filled so the NOK price stays flat within each month)
     #
     def ProteinGlobalShrimpPrice(self):
 
@@ -780,12 +979,27 @@ class DataLoader:
         dataClean = dataClean.sort_values("observation_date").reset_index(drop=True)
         dataClean = dataClean.rename(columns={
             "observation_date": "Date",
-            "PSHRIUSDM"       : "Protein_Shrimp_USD_mt_Weekly"
+            "PSHRIUSDM"       : "Shrimp_USD"
         })
 
-        ## Transform: forward-fill monthly to weekly Wednesday
+        ## Load USDNOK and take the rate on the publication date
+        _usdnok = pd.read_excel(self.CURRENCY_USDNOK, header=0)
+        _usdnok["Date"] = pd.to_datetime(_usdnok["Date"])
+        _usdnok = _usdnok.sort_values("Date").reset_index(drop=True)
+        _usdnok.columns = ["Date", "USDNOK"]
+
+        ## Convert to NOK at the publication date using merge_asof
+        dataClean = pd.merge_asof(
+            dataClean.sort_values("Date"),
+            _usdnok.sort_values("Date"),
+            on="Date",
+            direction="nearest"
+        )
+        dataClean["Protein_Shrimp_USD_mt_Weekly"] = dataClean["Shrimp_USD"] * dataClean["USDNOK"]
+
+        ## Transform: forward-fill monthly NOK price to weekly Wednesday
         dataTransform = (
-            dataClean
+            dataClean[["Date", "Protein_Shrimp_USD_mt_Weekly"]]
             .set_index("Date")
             .resample("W-WED")
             .ffill()
@@ -869,7 +1083,30 @@ class DataLoader:
         _dfNew["Value"] = _dfNew["Value"] * _dfNew["EURNOK"] / 1000
         _newResult = _extractHorizons(_dfNew, "Value")
 
-        ## --- Combine: old file where available, new file fills the rest ---
+        ## --- Bloomberg file: M3 and M6 gap-fill (Jul 2024 onward, EUR/tonne) ---
+        _xlBbg     = pd.read_excel(self.SALMON_FORWARD_BBG, sheet_name=None, header=0)
+        _bbgResult = None
+        _bbgSheets = {"M3": "JJCQ6", "M6": "JJCX6"}
+        _bbgFrames = []
+        for horizon, sheet in _bbgSheets.items():
+            if sheet in _xlBbg:
+                _s = _xlBbg[sheet].copy()
+                _s["ClosingDate"] = pd.to_datetime(_s["Date"])
+                _s["Value"]       = pd.to_numeric(_s["Last Price"], errors="coerce")
+                _rates = pd.merge_asof(
+                    _s[["ClosingDate"]].drop_duplicates().sort_values("ClosingDate"),
+                    _eurnok[["Date", "EURNOK"]],
+                    left_on="ClosingDate", right_on="Date", direction="backward"
+                ).drop(columns="Date")
+                _s = _s.merge(_rates, on="ClosingDate")
+                _s[f"Salmon_Forward_{horizon}_Weekly"] = _s["Value"] * _s["EURNOK"] / 1000
+                _bbgFrames.append(_s[["ClosingDate", f"Salmon_Forward_{horizon}_Weekly"]])
+        if _bbgFrames:
+            _bbgResult = _bbgFrames[0]
+            for _f in _bbgFrames[1:]:
+                _bbgResult = _bbgResult.merge(_f, on="ClosingDate", how="outer")
+
+        ## --- Combine: old file → new CSV → Bloomberg (priority order) ---
         _fwdCols = [f"Salmon_Forward_{l}_Weekly" for l in ["M1", "M3", "M6", "M12"]]
 
         dataDaily = pd.merge(_oldResult, _newResult,
@@ -879,6 +1116,13 @@ class DataLoader:
 
         for col in _fwdCols:
             dataDaily[col] = dataDaily[f"{col}_old"].fillna(dataDaily[f"{col}_new"])
+
+        if _bbgResult is not None:
+            dataDaily = dataDaily.merge(_bbgResult, on="ClosingDate", how="outer",
+                                        suffixes=("", "_bbg"))
+            for col in ["Salmon_Forward_M3_Weekly", "Salmon_Forward_M6_Weekly"]:
+                if f"{col}_bbg" in dataDaily.columns:
+                    dataDaily[col] = dataDaily[col].fillna(dataDaily[f"{col}_bbg"])
 
         dataDaily = dataDaily[["ClosingDate"] + _fwdCols]
 
@@ -1021,6 +1265,9 @@ class DataLoader:
         _lice        = self.SalmonLice()
         _ila         = self.SalmonILA()
         _shrimp      = self.ProteinGlobalShrimpPrice()
+        _fishmeal    = self.CommodityFishmeelPrice()
+        _nibor       = self.NIBOR3m()
+        _chile       = self.SalmonChileExports()
         _forward     = self.SalmonForwardPrice()
 
         ## Create Date from FishPool (Wednesday of ISO week)
@@ -1070,7 +1317,7 @@ class DataLoader:
             _eurnok, _usdnok,
             _brent, _wheat, _soybean, _rapseed, _carbon,
             _mowi, _salmar,
-            _lice, _ila, _shrimp, _forward
+            _lice, _ila, _shrimp, _fishmeal, _nibor, _chile, _forward
         ]:
 
             w = w.copy()

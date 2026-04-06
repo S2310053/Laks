@@ -26,6 +26,7 @@ class featureEngineer:
     _zeroWeek = {
         "EURNOK_Weekly":                              0,
         "USDNOK_Weekly":                              0,
+        "NIBOR_3m_Weekly":                            0,   # Bloomberg daily, Wednesday close, no lag
         "Protein_Pig_EUR_100_kg_Weekly":              0,
         "Protein_Broiler_EUR_100_kg_Weekly":          0,   # EU Commission publishes Friday; W-WED resample snaps to following Wed (no extra lag needed)
         "Equity_MOWI_NOK_Weekly":                     0,
@@ -37,6 +38,7 @@ class featureEngineer:
         "Commodity_Brent_CO4_NOK_bbl_Weekly":         0,
         "Commodity_Brent_CO5_NOK_bbl_Weekly":         0,
         "Commodity_Brent_CO6_NOK_bbl_Weekly":         0,
+        "Commodity_Brent_CO12_NOK_bbl_Weekly":        0,
         "Commodity_Wheat_CAA_NOK_mt_Weekly":          0,
         "Commodity_Wheat_CA1_NOK_mt_Weekly":          0,
         "Commodity_Wheat_CA2_NOK_mt_Weekly":          0,
@@ -44,6 +46,7 @@ class featureEngineer:
         "Commodity_Wheat_CA4_NOK_mt_Weekly":          0,
         "Commodity_Wheat_CA5_NOK_mt_Weekly":          0,
         "Commodity_Wheat_CA6_NOK_mt_Weekly":          0,
+        "Commodity_Wheat_CA12_NOK_mt_Weekly":         0,
         "Commodity_Soybean_SMA_NOK_st_Weekly":        0,
         "Commodity_Soybean_SM1_NOK_st_Weekly":        0,
         "Commodity_Soybean_SM2_NOK_st_Weekly":        0,
@@ -51,6 +54,7 @@ class featureEngineer:
         "Commodity_Soybean_SM4_NOK_st_Weekly":        0,
         "Commodity_Soybean_SM5_NOK_st_Weekly":        0,
         "Commodity_Soybean_SM6_NOK_st_Weekly":        0,
+        "Commodity_Soybean_SM12_NOK_st_Weekly":       0,
         "Commodity_Rapeseed_IJA_NOK_mt_Weekly":       0,
         "Commodity_Rapeseed_IJ1_NOK_mt_Weekly":       0,
         "Commodity_Rapeseed_IJ2_NOK_mt_Weekly":       0,
@@ -58,6 +62,7 @@ class featureEngineer:
         "Commodity_Rapeseed_IJ4_NOK_mt_Weekly":       0,
         "Commodity_Rapeseed_IJ5_NOK_mt_Weekly":       0,
         "Commodity_Rapeseed_IJ6_NOK_mt_Weekly":       0,
+        "Commodity_Rapeseed_IJ12_NOK_mt_Weekly":      0,
         "Commodity_Carbon_MOA_NOK_mt_Weekly":         0,
         "Commodity_Carbon_MO1_NOK_mt_Weekly":         0,
         "Commodity_Carbon_MO2_NOK_mt_Weekly":         0,
@@ -83,7 +88,9 @@ class featureEngineer:
         "Salmon_Lice_PctTreated_Weekly":              1,
         "Salmon_Lice_ICA_Count_Weekly":               1,   # ISA (ICA) locality count from BarentsWatch API
         "Salmon_ILA_ActiveLocalities_Weekly":         1,   # Active ILA outbreaks from Mattilsynet ila_pd.csv
-        "Protein_Shrimp_USD_mt_Weekly":               4}   # IMF/FRED monthly, ~4-week publication lag
+        "Protein_Shrimp_USD_mt_Weekly":               4,    # IMF/FRED monthly, ~4-week publication lag
+        "Commodity_Fishmeal_USD_mt_Weekly":           4,    # Bloomberg monthly end-of-month, ~4-week lag
+        "Salmon_Chile_Export_Volume_Weekly":          1}    # Chilean customs, ~1-week publication lag
 
     PUBLISH_LAG_WEEKS = _zeroWeek | _oneWeek
 
@@ -435,6 +442,14 @@ class featureEngineer:
         if "Salmon_Exported_Tons_SSB_Weekly" in df.columns:
             out["Export Volume"] = _dln(df["Salmon_Exported_Tons_SSB_Weekly"])
 
+        # ── 9b. Chilean Exports Δln (transition-only, ffill through gap weeks)
+        if "Salmon_Chile_Export_Volume_Weekly" in df.columns:
+            _chile = df["Salmon_Chile_Export_Volume_Weekly"]
+            _chile_changed = _chile != _chile.shift(1)
+            _chile_dln = _dln(_chile)
+            _chile_dln[~_chile_changed] = np.nan
+            out["Chilean Exports"] = _chile_dln.ffill()
+
         # ── 10–11. Biomass (1-2) and (2+): MoM growth with January cohort correction
         #
         # Problem: age buckets are year-based (Age = obs_year - release_year), so
@@ -540,7 +555,11 @@ class featureEngineer:
         if "CPI_Norway_Monthly" in df.columns:
             out["CPI NO Monthly"] = df["CPI_Norway_Monthly"]
 
-        # ── 26. Shrimp Δln (monthly series — compute at transitions, ffill within month)
+        # ── 25b. NIBOR 3m (raw level, already stationary) ────────────────────
+        if "NIBOR_3m_Weekly" in df.columns:
+            out["NIBOR 3m"] = df["NIBOR_3m_Weekly"]
+
+        # ── 26. Shrimp Δln (NOK price flat within month — transition-only Δln, ffill)
         if "Protein_Shrimp_USD_mt_Weekly" in df.columns:
             _shrimp = df["Protein_Shrimp_USD_mt_Weekly"]
             _shrimp_changed = _shrimp != _shrimp.shift(1)
@@ -558,33 +577,41 @@ class featureEngineer:
         if "Protein_Meat_Inflation_YoY_Monthly" in df.columns:
             out["Meat CPI (EU) Monthly"] = df["Protein_Meat_Inflation_YoY_Monthly"]
 
-        # ── 30–41. Commodities: Δln C01/C03/C06, slope ln(C06/C01),
-        #          curvature ln(C01) − 2·ln(C03) + ln(C06) ─────────────────────
+        # ── 30. Fishmeal Δln (NOK price flat within month — transition-only Δln, ffill)
+        if "Commodity_Fishmeal_USD_mt_Weekly" in df.columns:
+            _fish = df["Commodity_Fishmeal_USD_mt_Weekly"]
+            _fish_changed = _fish != _fish.shift(1)
+            _fish_dln = _dln(_fish)
+            _fish_dln[~_fish_changed] = np.nan
+            out["Fishmeal Monthly"] = _fish_dln.ffill()
+
+        # ── 31–50. Commodities: Δln C01/C06/C12, slope ln(C12/C01),
+        #          curvature ln(C01) − 2·ln(C06) + ln(C12) ──────────────────────
         _commodities = [
             ("Brent",    "Commodity_Brent_CO1_NOK_bbl_Weekly",
-                         "Commodity_Brent_CO3_NOK_bbl_Weekly",
-                         "Commodity_Brent_CO6_NOK_bbl_Weekly"),
+                         "Commodity_Brent_CO6_NOK_bbl_Weekly",
+                         "Commodity_Brent_CO12_NOK_bbl_Weekly"),
             ("Wheat",    "Commodity_Wheat_CA1_NOK_mt_Weekly",
-                         "Commodity_Wheat_CA3_NOK_mt_Weekly",
-                         "Commodity_Wheat_CA6_NOK_mt_Weekly"),
+                         "Commodity_Wheat_CA6_NOK_mt_Weekly",
+                         "Commodity_Wheat_CA12_NOK_mt_Weekly"),
             ("Rapeseed", "Commodity_Rapeseed_IJ1_NOK_mt_Weekly",
-                         "Commodity_Rapeseed_IJ3_NOK_mt_Weekly",
-                         "Commodity_Rapeseed_IJ6_NOK_mt_Weekly"),
+                         "Commodity_Rapeseed_IJ6_NOK_mt_Weekly",
+                         "Commodity_Rapeseed_IJ12_NOK_mt_Weekly"),
             ("Soybean",  "Commodity_Soybean_SM1_NOK_st_Weekly",
-                         "Commodity_Soybean_SM3_NOK_st_Weekly",
-                         "Commodity_Soybean_SM6_NOK_st_Weekly"),
+                         "Commodity_Soybean_SM6_NOK_st_Weekly",
+                         "Commodity_Soybean_SM12_NOK_st_Weekly"),
         ]
-        for label, c1, c3, c6 in _commodities:
+        for label, c1, c6, c12 in _commodities:
             if c1 in df.columns:
                 out[f"{label} FWD 1m"] = _dln(df[c1])
-            if c3 in df.columns:
-                out[f"{label} FWD 3m"] = _dln(df[c3])
             if c6 in df.columns:
                 out[f"{label} FWD 6m"] = _dln(df[c6])
-            if c1 in df.columns and c6 in df.columns:
-                out[f"{label} FWD Slope"] = _ln(df[c6] / df[c1])
-            if all(c in df.columns for c in [c1, c3, c6]):
-                out[f"{label} FWD Curvature"] = _ln(df[c1]) - 2 * _ln(df[c3]) + _ln(df[c6])
+            if c12 in df.columns:
+                out[f"{label} FWD 12m"] = _dln(df[c12])
+            if c1 in df.columns and c12 in df.columns:
+                out[f"{label} FWD Slope"] = _ln(df[c12] / df[c1])
+            if all(c in df.columns for c in [c1, c6, c12]):
+                out[f"{label} FWD Curvature"] = _ln(df[c1]) - 2 * _ln(df[c6]) + _ln(df[c12])
 
         return out.reset_index(drop=True)
 
