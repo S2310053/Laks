@@ -1083,30 +1083,7 @@ class DataLoader:
         _dfNew["Value"] = _dfNew["Value"] * _dfNew["EURNOK"] / 1000
         _newResult = _extractHorizons(_dfNew, "Value")
 
-        ## --- Bloomberg file: M3 and M6 gap-fill (Jul 2024 onward, EUR/tonne) ---
-        _xlBbg     = pd.read_excel(self.SALMON_FORWARD_BBG, sheet_name=None, header=0)
-        _bbgResult = None
-        _bbgSheets = {"M3": "JJCQ6", "M6": "JJCX6"}
-        _bbgFrames = []
-        for horizon, sheet in _bbgSheets.items():
-            if sheet in _xlBbg:
-                _s = _xlBbg[sheet].copy()
-                _s["ClosingDate"] = pd.to_datetime(_s["Date"])
-                _s["Value"]       = pd.to_numeric(_s["Last Price"], errors="coerce")
-                _rates = pd.merge_asof(
-                    _s[["ClosingDate"]].drop_duplicates().sort_values("ClosingDate"),
-                    _eurnok[["Date", "EURNOK"]],
-                    left_on="ClosingDate", right_on="Date", direction="backward"
-                ).drop(columns="Date")
-                _s = _s.merge(_rates, on="ClosingDate")
-                _s[f"Salmon_Forward_{horizon}_Weekly"] = _s["Value"] * _s["EURNOK"] / 1000
-                _bbgFrames.append(_s[["ClosingDate", f"Salmon_Forward_{horizon}_Weekly"]])
-        if _bbgFrames:
-            _bbgResult = _bbgFrames[0]
-            for _f in _bbgFrames[1:]:
-                _bbgResult = _bbgResult.merge(_f, on="ClosingDate", how="outer")
-
-        ## --- Combine: old file → new CSV → Bloomberg (priority order) ---
+        ## --- Combine: old file (NOK/kg) → new CSV (EUR/tonne converted) ---
         _fwdCols = [f"Salmon_Forward_{l}_Weekly" for l in ["M1", "M3", "M6", "M12"]]
 
         dataDaily = pd.merge(_oldResult, _newResult,
@@ -1116,13 +1093,6 @@ class DataLoader:
 
         for col in _fwdCols:
             dataDaily[col] = dataDaily[f"{col}_old"].fillna(dataDaily[f"{col}_new"])
-
-        if _bbgResult is not None:
-            dataDaily = dataDaily.merge(_bbgResult, on="ClosingDate", how="outer",
-                                        suffixes=("", "_bbg"))
-            for col in ["Salmon_Forward_M3_Weekly", "Salmon_Forward_M6_Weekly"]:
-                if f"{col}_bbg" in dataDaily.columns:
-                    dataDaily[col] = dataDaily[col].fillna(dataDaily[f"{col}_bbg"])
 
         dataDaily = dataDaily[["ClosingDate"] + _fwdCols]
 
