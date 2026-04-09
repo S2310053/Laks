@@ -43,5 +43,5 @@ eda.report()
 #print(data.info())
 
 
-#Factors.to_csv(r"/Users/fillipaskildsen/Documents/GitHub/Data/Factors.csv", index = False)
+Factors.to_csv(r"/Users/fillipaskildsen/Documents/GitHub/Data/Factors.csv", index = False)
 

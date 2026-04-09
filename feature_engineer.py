@@ -408,25 +408,36 @@ class featureEngineer:
         out = pd.DataFrame({"Date": df["Date"]})
 
         # ── Target ────────────────────────────────────────────────────────────
-        out["Salmon (NOK/KG)"] = _dln(spot)
+        out["∆ Salmon (NOK/KG)"] = _dln(spot)
 
-        # ── 1. AR term: Δln spot lag-1 ────────────────────────────────────────
-        out["Salmon (NOK/KG) 1w"] = _dln(spot).shift(1)
+        # ── 1. HAR-style Δln spot: avg over 1w, 2w, 1m, 3m, 6m, 12m ─────────
+        #    Each is the rolling average of Δln(spot) ending last week (shift(1)
+        #    ensures no look-ahead). Averages keep all horizons on the same scale.
+        _dln_spot = _dln(spot)
+        out["∆ Salmon (NOK/KG) 1w"]  = _dln_spot.rolling(1).mean().shift(1)
+        out["∆ Salmon (NOK/KG) 2w"]  = _dln_spot.rolling(2).mean().shift(1)
+        out["∆ Salmon (NOK/KG) 1m"]  = _dln_spot.rolling(4).mean().shift(1)
+        out["∆ Salmon (NOK/KG) 3m"]  = _dln_spot.rolling(13).mean().shift(1)
+        out["∆ Salmon (NOK/KG) 6m"]  = _dln_spot.rolling(26).mean().shift(1)
+        out["∆ Salmon (NOK/KG) 12m"] = _dln_spot.rolling(52).mean().shift(1)
 
         # ── 2. FP–SSB spread — reconstruct contemporaneous SSB by undoing the
         #       1-week publication lag (shift(-1)), compute ln(FP_t / SSB_t),
         #       then shift(1) so row t shows last week's spread (first available)
         if "Salmon_NOK_kg_SSB_Weekly" in df.columns:
             _ssb_contemp = df["Salmon_NOK_kg_SSB_Weekly"].shift(-1)
-            out["Spread (FP - SSB)"] = _ln(spot / _ssb_contemp).shift(1)
+            out["Spread (FP - SSB)"]   = (spot - _ssb_contemp).shift(1)
+            out["∆ Spread (FP - SSB)"] = (spot - _ssb_contemp).diff().shift(1)
 
-        # ── 3–6. Forward bases: ln(F_Mn / Spot) ──────────────────────────────
+        # ── 3–6. Forward bases: ln(F/S) level, then week-over-week change ─────
         for label, col in [("FWD 1m",  "Salmon_Forward_M1_Weekly"),
                             ("FWD 3m",  "Salmon_Forward_M3_Weekly"),
                             ("FWD 6m",  "Salmon_Forward_M6_Weekly"),
                             ("FWD 12m", "Salmon_Forward_M12_Weekly")]:
             if col in df.columns:
-                out[label] = _ln(df[col] / spot)
+                _basis            = _ln(df[col] / spot)
+                out[label]        = _basis
+                out[f"∆ {label}"] = _basis.diff()
 
         # ── 7–8. Forward curve slope & curvature ─────────────────────────────
         if all(c in df.columns for c in ["Salmon_Forward_M1_Weekly",
@@ -438,17 +449,27 @@ class featureEngineer:
             out["FWD Slope"]     = lnM12 - lnM1
             out["FWD Curvature"] = lnM1 - 2 * lnM6 + lnM12
 
-        # ── 9. Export volume Δln ──────────────────────────────────────────────
+        # ── 9. Export volume: HAR-style lags 1w, 2w, 1m ─────────────────────
+        #    Short memory — Norwegian supply shocks price within 1-2 weeks.
         if "Salmon_Exported_Tons_SSB_Weekly" in df.columns:
-            out["Export Volume"] = _dln(df["Salmon_Exported_Tons_SSB_Weekly"])
+            _exp_dln = _dln(df["Salmon_Exported_Tons_SSB_Weekly"])
+            out["∆ Export Volume 1w"] = _exp_dln.rolling(1).mean().shift(1)
+            out["∆ Export Volume 2w"] = _exp_dln.rolling(2).mean().shift(1)
+            out["∆ Export Volume 1m"] = _exp_dln.rolling(4).mean().shift(1)
 
-        # ── 9b. Chilean Exports Δln (transition-only, ffill through gap weeks)
+        # ── 9b. Chilean Exports: HAR-style lags 1w, 2w, 1m, 3m ──────────────
+        #    Transit lag (~5-6 weeks by ship) + market penetration justifies
+        #    the 3m window on top of the standard short-memory horizons.
         if "Salmon_Chile_Export_Volume_Weekly" in df.columns:
             _chile = df["Salmon_Chile_Export_Volume_Weekly"]
             _chile_changed = _chile != _chile.shift(1)
             _chile_dln = _dln(_chile)
             _chile_dln[~_chile_changed] = np.nan
-            out["Chilean Exports"] = _chile_dln.ffill()
+            _chile_dln = _chile_dln.ffill()
+            out["∆ Chilean Exports 1w"] = _chile_dln.rolling(1).mean().shift(1)
+            out["∆ Chilean Exports 2w"] = _chile_dln.rolling(2).mean().shift(1)
+            out["∆ Chilean Exports 1m"] = _chile_dln.rolling(4).mean().shift(1)
+            out["∆ Chilean Exports 3m"] = _chile_dln.rolling(13).mean().shift(1)
 
         # ── 10–11. Biomass (1-2) and (2+): MoM growth with January cohort correction
         #
@@ -486,7 +507,7 @@ class featureEngineer:
             _denom_12[_denom_12 < 1e3] = np.nan
             _ratio_12 = _ln(_b12 / _denom_12)
             _ratio_12[~_b12_changed] = np.nan    # blank out non-transition weeks
-            out["Biomass (1 - 2) Monthly"] = _ratio_12.ffill()
+            out["∆ Biomass (1 - 2) Monthly"] = _ratio_12.ffill()
 
             # Biomass (2+): compute ratio only at transitions, ffill within month
             _denom_2p = _b2p.shift(1).copy()
@@ -494,7 +515,7 @@ class featureEngineer:
             _denom_2p[_denom_2p < 1e3] = np.nan
             _ratio_2p = _ln(_b2p / _denom_2p)
             _ratio_2p[~_b2p_changed] = np.nan    # blank out non-transition weeks
-            out["Biomass (2+) Monthly"] = _ratio_2p.ffill()
+            out["∆ Biomass (2+) Monthly"] = _ratio_2p.ffill()
 
         # ── 13b. Total biomass MoM Δln (compute at transitions, ffill within month)
         if "Salmon_Biomass_Kg_Monthly" in df.columns:
@@ -502,7 +523,7 @@ class featureEngineer:
             _tbio_changed = _tbio != _tbio.shift(1)
             _tbio_dln = _dln(_tbio)
             _tbio_dln[~_tbio_changed] = np.nan
-            out["Total Biomass Monthly"] = _tbio_dln.ffill()
+            out["∆ Total Biomass Monthly"] = _tbio_dln.ffill()
 
         # ── 14. Average weight kg/fish ────────────────────────────────────────
         if all(c in df.columns for c in ["Salmon_Biomass_Kg_Monthly",
@@ -549,7 +570,7 @@ class featureEngineer:
 
         # ── 24. EURNOK Δln ────────────────────────────────────────────────────
         if "EURNOK_Weekly" in df.columns:
-            out["EURNOK"] = _dln(df["EURNOK_Weekly"])
+            out["∆ EURNOK"] = _dln(df["EURNOK_Weekly"])
 
         # ── 25. CPI Norway (level, already YoY %) ────────────────────────────
         if "CPI_Norway_Monthly" in df.columns:
@@ -565,11 +586,11 @@ class featureEngineer:
             _shrimp_changed = _shrimp != _shrimp.shift(1)
             _shrimp_dln = _dln(_shrimp)
             _shrimp_dln[~_shrimp_changed] = np.nan
-            out["Shrimp Price (Global) Monthly"] = _shrimp_dln.ffill()
+            out["∆ Shrimp Price (Global) Monthly"] = _shrimp_dln.ffill()
 
         # ── 27–28. Competing proteins Δln ────────────────────────────────────
-        for label, col in [("Broiler Price (EU)", "Protein_Broiler_EUR_100_kg_Weekly"),
-                            ("Pig Price (EU)",     "Protein_Pig_EUR_100_kg_Weekly")]:
+        for label, col in [("∆ Broiler Price (EU)", "Protein_Broiler_EUR_100_kg_Weekly"),
+                            ("∆ Pig Price (EU)",     "Protein_Pig_EUR_100_kg_Weekly")]:
             if col in df.columns:
                 out[label] = _dln(df[col])
 
@@ -583,7 +604,7 @@ class featureEngineer:
             _fish_changed = _fish != _fish.shift(1)
             _fish_dln = _dln(_fish)
             _fish_dln[~_fish_changed] = np.nan
-            out["Fishmeal Monthly"] = _fish_dln.ffill()
+            out["∆ Fishmeal Monthly"] = _fish_dln.ffill()
 
         # ── 31–50. Commodities: Δln C01/C06/C12, slope ln(C12/C01),
         #          curvature ln(C01) − 2·ln(C06) + ln(C12) ──────────────────────
@@ -603,11 +624,11 @@ class featureEngineer:
         ]
         for label, c1, c6, c12 in _commodities:
             if c1 in df.columns:
-                out[f"{label} FWD 1m"] = _dln(df[c1])
+                out[f"∆ {label} FWD 1m"] = _dln(df[c1])
             if c6 in df.columns:
-                out[f"{label} FWD 6m"] = _dln(df[c6])
+                out[f"∆ {label} FWD 6m"] = _dln(df[c6])
             if c12 in df.columns:
-                out[f"{label} FWD 12m"] = _dln(df[c12])
+                out[f"∆ {label} FWD 12m"] = _dln(df[c12])
             if c1 in df.columns and c12 in df.columns:
                 out[f"{label} FWD Slope"] = _ln(df[c12] / df[c1])
             if all(c in df.columns for c in [c1, c6, c12]):

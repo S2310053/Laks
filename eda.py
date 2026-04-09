@@ -69,7 +69,7 @@ class EDA:
     _META   = ["Date"]
 
     ## Target column in Factors — already log return (computed by FeatureEngineer)
-    _TARGET = "Salmon (NOK/KG)"
+    _TARGET = "∆ Salmon (NOK/KG)"
 
     ## Lag reference structure — consistent across ALL tests in this class.
     ## Economic horizon: 24 months (104 weeks) — covers the full salmon production
