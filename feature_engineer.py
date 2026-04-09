@@ -407,8 +407,20 @@ class featureEngineer:
 
         out = pd.DataFrame({"Date": df["Date"]})
 
-        # ── Target ────────────────────────────────────────────────────────────
-        out["∆ Salmon (NOK/KG)"] = _dln(spot)
+        # ── Multi-horizon targets (cumulative log returns vs last published price)
+        #    All Y = ln(S_{t+h} / S_{t-1}) so the full forward curve is recovered
+        #    from a single known anchor: S_{t+h} = S_{t-1} * exp(Y_h).
+        #    h = 0  → current week (not yet published on forecast date)
+        #    NaN at the tail where future data does not yet exist.
+        _ln_spot = _ln(spot)
+        _ln_spot_lag1 = _ln_spot.shift(1)           # S_{t-1}: last published price
+        out["Y 0w ∆ Salmon (NOK/KG)"]  = _ln_spot              - _ln_spot_lag1
+        out["Y 1w ∆ Salmon (NOK/KG)"]  = _ln_spot.shift(-1)  - _ln_spot_lag1
+        out["Y 2w ∆ Salmon (NOK/KG)"]  = _ln_spot.shift(-2)  - _ln_spot_lag1
+        out["Y 1m ∆ Salmon (NOK/KG)"]  = _ln_spot.shift(-4)  - _ln_spot_lag1
+        out["Y 3m ∆ Salmon (NOK/KG)"]  = _ln_spot.shift(-13) - _ln_spot_lag1
+        out["Y 6m ∆ Salmon (NOK/KG)"]  = _ln_spot.shift(-26) - _ln_spot_lag1
+        out["Y 12m ∆ Salmon (NOK/KG)"] = _ln_spot.shift(-52) - _ln_spot_lag1
 
         # ── 1. HAR-style Δln spot: avg over 1w, 2w, 1m, 3m, 6m, 12m ─────────
         #    Each is the rolling average of Δln(spot) ending last week (shift(1)
@@ -606,31 +618,29 @@ class featureEngineer:
             _fish_dln[~_fish_changed] = np.nan
             out["∆ Fishmeal Monthly"] = _fish_dln.ffill()
 
-        # ── 31–50. Commodities: Δln C01/C06/C12, slope ln(C12/C01),
-        #          curvature ln(C01) − 2·ln(C06) + ln(C12) ──────────────────────
+        # ── 31–50. Commodities: ln(F/S) basis + ∆ basis, slope, curvature ──────
         _commodities = [
-            ("Brent",    "Commodity_Brent_CO1_NOK_bbl_Weekly",
-                         "Commodity_Brent_CO6_NOK_bbl_Weekly",
-                         "Commodity_Brent_CO12_NOK_bbl_Weekly"),
-            ("Wheat",    "Commodity_Wheat_CA1_NOK_mt_Weekly",
-                         "Commodity_Wheat_CA6_NOK_mt_Weekly",
-                         "Commodity_Wheat_CA12_NOK_mt_Weekly"),
-            ("Rapeseed", "Commodity_Rapeseed_IJ1_NOK_mt_Weekly",
-                         "Commodity_Rapeseed_IJ6_NOK_mt_Weekly",
-                         "Commodity_Rapeseed_IJ12_NOK_mt_Weekly"),
-            ("Soybean",  "Commodity_Soybean_SM1_NOK_st_Weekly",
-                         "Commodity_Soybean_SM6_NOK_st_Weekly",
-                         "Commodity_Soybean_SM12_NOK_st_Weekly"),
+            ("Brent",   "Commodity_Brent_COA_NOK_bbl_Weekly",
+                        "Commodity_Brent_CO1_NOK_bbl_Weekly",
+                        "Commodity_Brent_CO6_NOK_bbl_Weekly",
+                        "Commodity_Brent_CO12_NOK_bbl_Weekly"),
+            ("Wheat",   "Commodity_Wheat_CAA_NOK_mt_Weekly",
+                        "Commodity_Wheat_CA1_NOK_mt_Weekly",
+                        "Commodity_Wheat_CA6_NOK_mt_Weekly",
+                        "Commodity_Wheat_CA12_NOK_mt_Weekly"),
+            ("Soybean", "Commodity_Soybean_SMA_NOK_st_Weekly",
+                        "Commodity_Soybean_SM1_NOK_st_Weekly",
+                        "Commodity_Soybean_SM6_NOK_st_Weekly",
+                        "Commodity_Soybean_SM12_NOK_st_Weekly"),
         ]
-        for label, c1, c6, c12 in _commodities:
-            if c1 in df.columns:
-                out[f"∆ {label} FWD 1m"] = _dln(df[c1])
-            if c6 in df.columns:
-                out[f"∆ {label} FWD 6m"] = _dln(df[c6])
-            if c12 in df.columns:
-                out[f"∆ {label} FWD 12m"] = _dln(df[c12])
+        for label, c0, c1, c6, c12 in _commodities:
+            for tenor, cf in [("1m", c1), ("6m", c6), ("12m", c12)]:
+                if c0 in df.columns and cf in df.columns:
+                    _basis = _ln(df[cf] / df[c0])
+                    out[f"{label} FWD {tenor}"]   = _basis
+                    out[f"∆ {label} FWD {tenor}"] = _basis.diff()
             if c1 in df.columns and c12 in df.columns:
-                out[f"{label} FWD Slope"] = _ln(df[c12] / df[c1])
+                out[f"{label} FWD Slope"]     = _ln(df[c12] / df[c1])
             if all(c in df.columns for c in [c1, c6, c12]):
                 out[f"{label} FWD Curvature"] = _ln(df[c1]) - 2 * _ln(df[c6]) + _ln(df[c12])
 

@@ -69,7 +69,7 @@ class EDA:
     _META   = ["Date"]
 
     ## Target column in Factors — already log return (computed by FeatureEngineer)
-    _TARGET = "∆ Salmon (NOK/KG)"
+    _TARGET = "Y 0w ∆ Salmon (NOK/KG)"
 
     ## Lag reference structure — consistent across ALL tests in this class.
     ## Economic horizon: 24 months (104 weeks) — covers the full salmon production
@@ -286,7 +286,7 @@ class EDA:
             ax.plot(x_range,
                     stats.norm.pdf(x_range, loc=y_clean.mean(), scale=y_clean.std()),
                     color="red", lw=1.8, label="Normal fit (JB H₀)")
-            ax.set_title("Distribution of Log Return y_t — Salmon (NOK/KG)")
+            ax.set_title("Distribution of Log Return y_t — Y 0w ∆ Salmon (NOK/KG)")
             ax.legend()
             plt.tight_layout()
             plt.savefig("eda_hist_y.pdf")
