@@ -43,5 +43,7 @@ eda.report()
 #print(data.info())
 
 
-Factors.to_csv(r"C:\Users\arzol\OneDrive\Escritorio\Work\Master Thesis\Laks\Data\Factors.csv", index = False)
+Factors.to_csv(r"/Users/fillipaskildsen/Documents/GitHub/Data/Factors.csv", index = False)
+
+
 

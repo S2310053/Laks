@@ -1083,7 +1083,8 @@ class DataLoader:
         _dfNew["Value"] = _dfNew["Value"] * _dfNew["EURNOK"] / 1000
         _newResult = _extractHorizons(_dfNew, "Value")
 
-        ## --- Combine: old file (NOK/kg) → new CSV (EUR/tonne converted) ---
+        ## --- Combine: old file (2006–Jan 2025, NOK/kg) → new CSV (Sep 2024–, EUR/tonne→NOK/kg) ---
+        ##     Old file takes priority where both overlap.
         _fwdCols = [f"Salmon_Forward_{l}_Weekly" for l in ["M1", "M3", "M6", "M12"]]
 
         dataDaily = pd.merge(_oldResult, _newResult,
