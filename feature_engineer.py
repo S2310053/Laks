@@ -27,8 +27,8 @@ class featureEngineer:
         "EURNOK_Weekly":                              0,
         "USDNOK_Weekly":                              0,
         "NIBOR_3m_Weekly":                            0,   # Bloomberg daily, Wednesday close, no lag
-        "Protein_Pig_EUR_100_kg_Weekly":              0,
-        "Protein_Broiler_EUR_100_kg_Weekly":          0,   # EU Commission publishes Friday; W-WED resample snaps to following Wed (no extra lag needed)
+        "Protein_Pig_EUR_100_kg_Weekly":             -1,   # Bloomberg dates Friday, actual release Wed — shift back 1 week to correct misdating
+        "Protein_Broiler_EUR_100_kg_Weekly":          0,   # W-WED resample already places Friday publication in following bin — no extra lag needed
         "Equity_MOWI_NOK_Weekly":                     0,
         "Equity_SALMAR_NOK_Weekly":                   0,
         "Commodity_Brent_COA_NOK_bbl_Weekly":         0,   
@@ -162,7 +162,7 @@ class featureEngineer:
 
         # ── Weekly lags (fixed row shift) ─────────────────────────────────────
         for col, lag in self.PUBLISH_LAG_WEEKS.items():
-            if col in data.columns and lag > 0:
+            if col in data.columns and lag != 0:
                 data[col] = data[col].shift(lag)
 
         # ── Monthly lags (EOMONTH-exact, via merge_asof) ──────────────────────
@@ -564,11 +564,13 @@ class featureEngineer:
             out["Lice Outbreak 1m"] = _lice.rolling(4).mean().shift(1)
             out["Lice Outbreak 3m"] = _lice.rolling(13).mean().shift(1)
         if "Salmon_SeaTemp_3m_Weekly" in df.columns:
+            out["Sea Temp"]         = df["Salmon_SeaTemp_3m_Weekly"]
             out["Sea Temp 12m Avg"] = df["Salmon_SeaTemp_3m_Weekly"].rolling(52).mean()
 
-        # ── 24. EURNOK Δln — HAR structure matching salmon price lags ────────────
+        # ── 24. EURNOK Δln — contemporaneous (no publication lag) + HAR lags ──────
         if "EURNOK_Weekly" in df.columns:
             _dln_eurnok = _dln(df["EURNOK_Weekly"])
+            out["∆ EURNOK"]     = _dln_eurnok
             out["∆ EURNOK 1w"]  = _dln_eurnok.rolling(1).mean().shift(1)
             out["∆ EURNOK 2w"]  = _dln_eurnok.rolling(2).mean().shift(1)
             out["∆ EURNOK 1m"]  = _dln_eurnok.rolling(4).mean().shift(1)
@@ -584,55 +586,98 @@ class featureEngineer:
         if "NIBOR_3m_Weekly" in df.columns:
             out["NIBOR 3m"] = df["NIBOR_3m_Weekly"]
 
-        # ── 26. Shrimp Δln (NOK price flat within month — transition-only Δln, ffill)
+        # ── 26. Shrimp Δln — HAR structure (4-week publication lag, no contemporaneous)
         if "Protein_Shrimp_USD_mt_Weekly" in df.columns:
             _shrimp = df["Protein_Shrimp_USD_mt_Weekly"]
             _shrimp_changed = _shrimp != _shrimp.shift(1)
             _shrimp_dln = _dln(_shrimp)
             _shrimp_dln[~_shrimp_changed] = np.nan
-            out["∆ Shrimp Price (Global) Monthly"] = _shrimp_dln.ffill()
+            _shrimp_dln = _shrimp_dln.ffill()
+            out["∆ Shrimp Price (Global) 1m Monthly"] = _shrimp_dln
 
-        # ── 27–28. Competing proteins Δln ────────────────────────────────────
-        for label, col in [("∆ Broiler Price (EU)", "Protein_Broiler_EUR_100_kg_Weekly"),
-                            ("∆ Pig Price (EU)",     "Protein_Pig_EUR_100_kg_Weekly")]:
-            if col in df.columns:
-                out[label] = _dln(df[col])
+            # Rolling averages: resample to monthly first to avoid over-weighting
+            # forward-filled weekly repetitions, then reindex back to weekly
+            _dates = pd.to_datetime(df["Date"])
+            _shrimp_dln_monthly = (
+                _shrimp_dln
+                .groupby(_dates.dt.to_period("M"))
+                .first()
+            )
+            _shrimp_dln_monthly.index = _shrimp_dln_monthly.index.to_timestamp(how="start")
+            for _months, _label in [(3, "3m"), (6, "6m"), (12, "12m")]:
+                _rolled = (
+                    _shrimp_dln_monthly
+                    .rolling(_months).mean()
+                    .reindex(_dates, method="ffill")
+                    .values
+                )
+                out[f"∆ Shrimp Price (Global) {_label} Monthly"] = _rolled
+
+        # ── 27–28. Competing proteins Δln (HAR structure) ────────────────────
+        # Broiler: W-WED resample places Friday publication in following bin,
+        #          so _dln_p is already a 1w lag — label accordingly, no extra shift(1).
+        # Pig: published Wed (current week), so _dln_p is contemporaneous.
+        if "Protein_Broiler_EUR_100_kg_Weekly" in df.columns:
+            _dln_b = _dln(df["Protein_Broiler_EUR_100_kg_Weekly"])
+            out["∆ Broiler Price (EU) 1w"]  = _dln_b
+            out["∆ Broiler Price (EU) 2w"]  = _dln_b.rolling(2).mean()
+            out["∆ Broiler Price (EU) 1m"]  = _dln_b.rolling(4).mean()
+            out["∆ Broiler Price (EU) 3m"]  = _dln_b.rolling(13).mean()
+            out["∆ Broiler Price (EU) 6m"]  = _dln_b.rolling(26).mean()
+            out["∆ Broiler Price (EU) 12m"] = _dln_b.rolling(52).mean()
+
+        if "Protein_Pig_EUR_100_kg_Weekly" in df.columns:
+            _dln_pig = _dln(df["Protein_Pig_EUR_100_kg_Weekly"])
+            out["∆ Pig Price (EU)"]     = _dln_pig
+            out["∆ Pig Price (EU) 1w"]  = _dln_pig.rolling(2).mean()
+            out["∆ Pig Price (EU) 2w"]  = _dln_pig.rolling(3).mean()
+            out["∆ Pig Price (EU) 1m"]  = _dln_pig.rolling(5).mean()
+            out["∆ Pig Price (EU) 3m"]  = _dln_pig.rolling(14).mean()
+            out["∆ Pig Price (EU) 6m"]  = _dln_pig.rolling(27).mean()
+            out["∆ Pig Price (EU) 12m"] = _dln_pig.rolling(53).mean()
 
         # ── 29. Meat Inflation YoY (deferred) ────────────────────────────────
         if "Protein_Meat_Inflation_YoY_Monthly" in df.columns:
             out["Meat CPI (EU) Monthly"] = df["Protein_Meat_Inflation_YoY_Monthly"]
 
-        # ── 30. Fishmeal Δln (NOK price flat within month — transition-only Δln, ffill)
+        # ── 30. Fishmeal Δln — HAR structure (4-week publication lag, no contemporaneous)
         if "Commodity_Fishmeal_USD_mt_Weekly" in df.columns:
             _fish = df["Commodity_Fishmeal_USD_mt_Weekly"]
             _fish_changed = _fish != _fish.shift(1)
             _fish_dln = _dln(_fish)
             _fish_dln[~_fish_changed] = np.nan
-            out["∆ Fishmeal Monthly"] = _fish_dln.ffill()
+            _fish_dln = _fish_dln.ffill()
+            out["∆ Fishmeal 1m Monthly"] = _fish_dln
 
-        # ── 31–50. Commodities: Δln C01/C06/C12, slope ln(C12/C01),
-        #          curvature ln(C01) − 2·ln(C06) + ln(C12) ──────────────────────
+            # Rolling averages: resample to monthly first to avoid over-weighting
+            # forward-filled weekly repetitions, then reindex back to weekly
+            _dates = pd.to_datetime(df["Date"])
+            _fish_dln_monthly = (
+                _fish_dln
+                .groupby(_dates.dt.to_period("M"))
+                .first()
+            )
+            _fish_dln_monthly.index = _fish_dln_monthly.index.to_timestamp(how="start")
+            for _months, _label in [(3, "3m"), (6, "6m"), (12, "12m")]:
+                _rolled = (
+                    _fish_dln_monthly
+                    .rolling(_months).mean()
+                    .reindex(_dates, method="ffill")
+                    .values
+                )
+                out[f"∆ Fishmeal {_label} Monthly"] = _rolled
+
+        # ── 31–34. Commodities: slope ln(C12/C01), curvature ln(C01)−2·ln(C06)+ln(C12)
+        #          Brent and Soybean only (Wheat starts 2016, Rapeseed data unreliable)
         _commodities = [
-            ("Brent",    "Commodity_Brent_CO1_NOK_bbl_Weekly",
-                         "Commodity_Brent_CO6_NOK_bbl_Weekly",
-                         "Commodity_Brent_CO12_NOK_bbl_Weekly"),
-            ("Wheat",    "Commodity_Wheat_CA1_NOK_mt_Weekly",
-                         "Commodity_Wheat_CA6_NOK_mt_Weekly",
-                         "Commodity_Wheat_CA12_NOK_mt_Weekly"),
-            ("Rapeseed", "Commodity_Rapeseed_IJ1_NOK_mt_Weekly",
-                         "Commodity_Rapeseed_IJ6_NOK_mt_Weekly",
-                         "Commodity_Rapeseed_IJ12_NOK_mt_Weekly"),
-            ("Soybean",  "Commodity_Soybean_SM1_NOK_st_Weekly",
-                         "Commodity_Soybean_SM6_NOK_st_Weekly",
-                         "Commodity_Soybean_SM12_NOK_st_Weekly"),
+            ("Brent",   "Commodity_Brent_CO1_NOK_bbl_Weekly",
+                        "Commodity_Brent_CO6_NOK_bbl_Weekly",
+                        "Commodity_Brent_CO12_NOK_bbl_Weekly"),
+            ("Soybean", "Commodity_Soybean_SM1_NOK_st_Weekly",
+                        "Commodity_Soybean_SM6_NOK_st_Weekly",
+                        "Commodity_Soybean_SM12_NOK_st_Weekly"),
         ]
         for label, c1, c6, c12 in _commodities:
-            if c1 in df.columns:
-                out[f"∆ {label} FWD 1m"] = _dln(df[c1])
-            if c6 in df.columns:
-                out[f"∆ {label} FWD 6m"] = _dln(df[c6])
-            if c12 in df.columns:
-                out[f"∆ {label} FWD 12m"] = _dln(df[c12])
             if c1 in df.columns and c12 in df.columns:
                 out[f"{label} FWD Slope"] = _ln(df[c12] / df[c1])
             if all(c in df.columns for c in [c1, c6, c12]):

@@ -42,8 +42,4 @@ eda.report()
 #print(data.columns)
 #print(data.info())
 
-
-Factors.to_csv(r"/Users/fillipaskildsen/Documents/GitHub/Data/Factors.csv", index = False)
-
-
-
+Factors[Factors["Date"] >= "2006-01-01"].to_csv(r"/Users/fillipaskildsen/Documents/GitHub/Data/Factors.csv", index = False)
