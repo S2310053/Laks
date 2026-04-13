@@ -21,7 +21,7 @@ df = df.sort_values("Date").reset_index(drop=True)
 HOLDOUT_START = "2022-01-01"
 
 Y_COLS   = [c for c in df.columns if c.startswith("Y ")]
-NON_FEAT = {"Date"} | set(Y_COLS)
+NON_FEAT = {"Date", "Spot (NOK/KG)"} | set(Y_COLS)
 ALL_FEAT = [c for c in df.columns if c not in NON_FEAT]
 
 os.makedirs("Results", exist_ok=True)
@@ -128,34 +128,50 @@ for target in Y_COLS:
         cv_actuals = np.concatenate([f["actuals"] for f in fold_results])
         cv_dates   = np.concatenate([f["dates"]   for f in fold_results])
 
-        cv_rmse = np.sqrt(mean_squared_error(cv_actuals, cv_preds))
-        cv_r2   = r2_score(cv_actuals, cv_preds)
+        cv_rmse    = np.sqrt(mean_squared_error(cv_actuals, cv_preds))
+        cv_r2      = r2_score(cv_actuals, cv_preds)
+        cv_hitrate = np.mean(np.sign(cv_preds) == np.sign(cv_actuals))
         print(f"  CV       RMSE={cv_rmse:.4f}  R²={cv_r2:.4f}  "
-              f"(n_obs={len(cv_actuals)}, folds={len(fold_results)})")
+              f"Hit={cv_hitrate:.1%}  (n_obs={len(cv_actuals)}, folds={len(fold_results)})")
     else:
-        cv_rmse, cv_r2, cv_preds, cv_actuals, cv_dates = None, None, [], [], []
+        cv_rmse, cv_r2, cv_hitrate = None, None, None
+        cv_preds, cv_actuals, cv_dates = [], [], []
         print("  CV       insufficient data for all folds")
 
     ## ── Final model: train on full CV period, evaluate on holdout ────────────
     final_model = CatBoostRegressor(**CB_PARAMS)
     final_model.fit(cv_data[ALL_FEAT], cv_data[target])
 
-    hold_preds   = final_model.predict(hold_data[ALL_FEAT])
-    hold_actuals = hold_data[target].values
-    hold_rmse    = np.sqrt(mean_squared_error(hold_actuals, hold_preds))
-    hold_r2      = r2_score(hold_actuals, hold_preds)
+    hold_preds    = final_model.predict(hold_data[ALL_FEAT])
+    hold_actuals  = hold_data[target].values
+    hold_rmse     = np.sqrt(mean_squared_error(hold_actuals, hold_preds))
+    hold_r2       = r2_score(hold_actuals, hold_preds)
+    hold_hitrate  = np.mean(np.sign(hold_preds) == np.sign(hold_actuals))
+
+    # Price-level R²: S_{t-1} * exp(Y_hat) vs S_{t-1} * exp(Y_actual)
+    hold_spot     = hold_data["Spot (NOK/KG)"].values
+    price_actual  = hold_spot * np.exp(hold_actuals)
+    price_pred    = hold_spot * np.exp(hold_preds)
+    hold_r2_price   = r2_score(price_actual, price_pred)
+    hold_rmse_price = np.sqrt(mean_squared_error(price_actual, price_pred))
+
     print(f"  Holdout  RMSE={hold_rmse:.4f}  R²={hold_r2:.4f}  "
-          f"(n={len(hold_data)})")
+          f"RMSE(price)={hold_rmse_price:.2f}  R²(price)={hold_r2_price:.4f}  "
+          f"Hit={hold_hitrate:.1%}  (n={len(hold_data)})")
 
     summary.append({
-        "Y":           target,
-        "Horizon":     horizon,
-        "CV RMSE":     cv_rmse,
-        "CV R2":       cv_r2,
-        "Hold RMSE":   hold_rmse,
-        "Hold R2":     hold_r2,
-        "n_train":     len(cv_data),
-        "n_holdout":   len(hold_data),
+        "Y":            target,
+        "Horizon":      horizon,
+        "CV RMSE":      cv_rmse,
+        "CV R2":        cv_r2,
+        "CV Hit":       cv_hitrate,
+        "Hold RMSE":      hold_rmse,
+        "Hold R2":        hold_r2,
+        "Hold RMSE Price": hold_rmse_price,
+        "Hold R2 Price":   hold_r2_price,
+        "Hold Hit":       hold_hitrate,
+        "n_train":      len(cv_data),
+        "n_holdout":    len(hold_data),
     })
 
     ## ── Feature importance ───────────────────────────────────────────────────
@@ -163,6 +179,10 @@ for target in Y_COLS:
         final_model.get_feature_importance(),
         index=ALL_FEAT
     ).sort_values(ascending=False)
+
+    print(f"  Top 10 features:")
+    for feat, score in importance.head(10).items():
+        print(f"    {score:6.2f}  {feat}")
 
     ## ── Plot ─────────────────────────────────────────────────────────────────
     n_axes = 3 if len(cv_preds) > 0 else 2

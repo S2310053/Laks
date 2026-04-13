@@ -418,6 +418,7 @@ class featureEngineer:
         #
         #    These use future data — valid as targets only, never as predictors.
         _dln_spot = _dln(spot)
+        out["Spot (NOK/KG)"] = spot.shift(1)   # last known spot — helper for price recovery, NOT a model feature
         out["Y 0w ∆ Salmon (NOK/KG)"]  = _dln_spot
         out["Y 1w ∆ Salmon (NOK/KG)"]  = _dln_spot.rolling(2).sum().shift(-1)
         out["Y 2w ∆ Salmon (NOK/KG)"]  = _dln_spot.rolling(3).sum().shift(-2)
