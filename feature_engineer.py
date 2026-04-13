@@ -444,13 +444,16 @@ class featureEngineer:
             out["Spread (FP - SSB)"]   = (spot - _ssb_contemp).shift(1)
             out["∆ Spread (FP - SSB)"] = (spot - _ssb_contemp).diff().shift(1)
 
-        # ── 3–6. Forward bases: ln(F/S) level, then week-over-week change ─────
+        # ── 3–6. Forward bases: ln(F_t / S_{t-1}) — current forward vs last known
+        #        spot. F_t is observable same-day (FishPool end-of-day). S_{t-1}
+        #        is the spot published this week (1-week publication lag).
+        #        spot.shift(1) applies only here — not a general lag change.
         for label, col in [("FWD 1m",  "Salmon_Forward_M1_Weekly"),
                             ("FWD 3m",  "Salmon_Forward_M3_Weekly"),
                             ("FWD 6m",  "Salmon_Forward_M6_Weekly"),
                             ("FWD 12m", "Salmon_Forward_M12_Weekly")]:
             if col in df.columns:
-                _basis            = _ln(df[col] / spot)
+                _basis            = _ln(df[col] / spot.shift(1))
                 out[label]        = _basis
                 out[f"∆ {label}"] = _basis.diff()
 
