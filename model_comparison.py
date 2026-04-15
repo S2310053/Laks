@@ -1,85 +1,422 @@
 ##
-#  Model comparison on Factors.csv
-#  Walk-forward cross-validation across multiple models
+#  Model comparison: CatBoost vs SARIMA vs Random Walk
+#  Horizons: Y 1m, Y 3m, Y 6m, Y 12m
+#  Purged walk-forward CV (same structure as catboost_model.py)
+#  Holdout: 2022-2025
+#
+#  Metrics: RMSE, MAE, R², Hit Rate (log-return space)
+#
 ##
+
+import warnings
+warnings.filterwarnings("ignore")
 
 import pandas as pd
 import numpy as np
+import re, os, time
 from catboost import CatBoostRegressor
-from xgboost import XGBRegressor
-from lightgbm import LGBMRegressor
-from sklearn.linear_model import Lasso, Ridge
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.preprocessing import StandardScaler
+from pmdarima import auto_arima
+from sklearn.metrics import mean_squared_error, r2_score
+import matplotlib
+matplotlib.use("TkAgg")
+import matplotlib.pyplot as plt
 
-## Load data
+## ── Config ───────────────────────────────────────────────────────────────────
+HOLDOUT_START  = "2022-01-01"
+WEEKLY_RET_COL = "Y 0w ∆ Salmon (NOK/KG)"   # r_t = ln(S_t / S_{t-1})
+
+os.makedirs("Results", exist_ok=True)
+
+## ── Load data ────────────────────────────────────────────────────────────────
 df = pd.read_csv("Data/Factors.csv", parse_dates=["Date"])
-df = df.dropna(subset=["Salmon (NOK/KG)"]).reset_index(drop=True)
+df = df.sort_values("Date").reset_index(drop=True)
 
-TARGET   = "Salmon (NOK/KG)"
-FEATURES = [c for c in df.columns if c not in ["Date", TARGET]]
+Y_COLS   = [c for c in df.columns if c.startswith("Y ")]
+NON_FEAT = {"Date", "Spot (NOK/KG)"} | set(Y_COLS)
+ALL_FEAT = [c for c in df.columns if c not in NON_FEAT]
 
-TRAIN_YEARS = 5
-test_years  = sorted(df["Date"].dt.year.unique())[TRAIN_YEARS:]
-
-## Models to compare
-models = {
-    "Random Walk":  None,
-    "CatBoost":     CatBoostRegressor(iterations=500, learning_rate=0.05, depth=6,
-                                      loss_function="RMSE", random_seed=42, verbose=False),
-    "XGBoost":      XGBRegressor(n_estimators=500, learning_rate=0.05, max_depth=6,
-                                 random_state=42, verbosity=0),
-    "LightGBM":     LGBMRegressor(n_estimators=500, learning_rate=0.05, max_depth=6,
-                                  random_state=42, verbose=-1),
-    "Random Forest":RandomForestRegressor(n_estimators=300, max_depth=6,
-                                          random_state=42, n_jobs=-1),
-    "Ridge":        Ridge(alpha=1.0),
-    "Lasso":        Lasso(alpha=0.001, max_iter=5000),
+## ── Horizon config ───────────────────────────────────────────────────────────
+#  steps       = number of consecutive weekly log-returns summed in the target
+#  purge_weeks = rows removed between train and test to prevent label overlap
+#
+#  Target construction (feature_engineer.py):
+#    Y 0w  = _dln_spot                    → 1 return,  shift=0
+#    Y 1w  = rolling(2).sum().shift(-1)   → 2 returns, shift=1
+#    Y 2w  = rolling(3).sum().shift(-2)   → 3 returns, shift=2
+#    Y 1m  = rolling(5).sum().shift(-4)   → 5 returns, shift=4
+#    Y 3m  = rolling(14).sum().shift(-13) → 14 returns, shift=13
+#    Y 6m  = rolling(27).sum().shift(-26) → 27 returns, shift=26
+#    Y 12m = rolling(53).sum().shift(-52) → 53 returns, shift=52
+HORIZONS = {
+    "Y 0w ∆ Salmon (NOK/KG)":  {"purge_weeks":  0, "n_folds": 10, "steps":  1},
+    "Y 1w ∆ Salmon (NOK/KG)":  {"purge_weeks":  1, "n_folds": 10, "steps":  2},
+    "Y 2w ∆ Salmon (NOK/KG)":  {"purge_weeks":  2, "n_folds": 10, "steps":  3},
+    "Y 1m ∆ Salmon (NOK/KG)":  {"purge_weeks":  4, "n_folds": 10, "steps":  5},
+    "Y 3m ∆ Salmon (NOK/KG)":  {"purge_weeks": 13, "n_folds":  8, "steps": 14},
+    "Y 6m ∆ Salmon (NOK/KG)":  {"purge_weeks": 26, "n_folds":  6, "steps": 27},
+    "Y 12m ∆ Salmon (NOK/KG)": {"purge_weeks": 52, "n_folds":  4, "steps": 53},
 }
 
-def rmse(a, b): return np.sqrt(np.mean((a - b)**2))
-def r2(a, b):
-    ss_res = np.sum((a - b)**2)
-    ss_tot = np.sum((a - np.mean(a))**2)
-    return 1 - ss_res / ss_tot
+## ── CatBoost params (identical to catboost_model.py) ─────────────────────────
+CB_PARAMS = dict(
+    iterations=500, learning_rate=0.05, depth=6,
+    loss_function="RMSE", random_seed=42,
+    verbose=False, allow_writing_files=False,
+)
 
-results = {name: {"preds": [], "actuals": []} for name in models}
+## ── SARIMA params ────────────────────────────────────────────────────────────
+#  m=52: weekly data, annual seasonal cycle (52 weeks per year).
+#  d=0, D=0: log-returns are already stationary — no differencing needed.
+#  Orders selected by AIC via stepwise search.
+def _fit_sarima(series):
+    return auto_arima(
+        series,
+        seasonal              = True,
+        m                     = 52,
+        d                     = 0,
+        D                     = 0,
+        max_p                 = 3,
+        max_q                 = 3,
+        max_P                 = 1,
+        max_Q                 = 1,
+        stepwise              = True,
+        information_criterion = "aic",
+        error_action          = "ignore",
+        suppress_warnings     = True,
+    )
 
-for test_year in test_years:
-    train = df[df["Date"].dt.year < test_year].copy()
-    test  = df[df["Date"].dt.year == test_year].copy()
-    if len(test) == 0:
+## ── Metrics ──────────────────────────────────────────────────────────────────
+#  R² is valid here because targets are log-returns (stationary).
+#  R² > 0 means the model beats predicting the sample mean.
+#  R² < 0 means the model is worse than the sample mean.
+def rmse(a, b): return np.sqrt(mean_squared_error(a, b))
+def mae(a, b):  return np.mean(np.abs(a - b))
+def r2(a, b):   return r2_score(a, b)
+def hit(a, b):  return np.mean(np.sign(a) == np.sign(b))
+
+## ── Purged walk-forward CV: CatBoost ─────────────────────────────────────────
+def cv_catboost(cv_data, target, features, purge_weeks, n_folds):
+    n         = len(cv_data)
+    fold_size = n // n_folds
+    results   = []
+
+    for i in range(1, n_folds):
+        test_start = i * fold_size
+        test_end   = (i + 1) * fold_size if i < n_folds - 1 else n
+        train_end  = test_start - purge_weeks
+        if train_end < fold_size:
+            continue
+
+        train = cv_data.iloc[:train_end].dropna(subset=[target])
+        test  = cv_data.iloc[test_start:test_end].dropna(subset=[target])
+
+        if len(train) < 50 or len(test) == 0:
+            continue
+
+        model = CatBoostRegressor(**CB_PARAMS)
+        model.fit(train[features], train[target])
+
+        results.append({
+            "dates":   test["Date"].values,
+            "actuals": test[target].values,
+            "preds":   model.predict(test[features]),
+        })
+
+    return results
+
+## ── Purged walk-forward CV: SARIMA ───────────────────────────────────────────
+#
+#  SARIMA is univariate: input = weekly log-return r_t (Y_0w column).
+#  Training series is date-filtered from df_all (avoids NaN contamination
+#  from multi-step target construction in cv_data).
+#
+#  Forecast indexing:
+#    fc[0]   = r_{train_cutoff + 1w}   (1-step-ahead)
+#    fc[k]   = r_{train_cutoff + (k+1)w}
+#
+#  Test row j is at train_cutoff + purge_weeks + j weeks (weekly data):
+#    Y_h at test row j = Σ r from row j to row j+steps-1
+#                      = Σ fc[ purge_weeks-1+j  :  purge_weeks-1+j+steps ]
+#
+def cv_sarima(df_all, cv_data, target, weekly_ret_col, purge_weeks, n_folds, steps):
+    n         = len(cv_data)
+    fold_size = n // n_folds
+    results   = []
+
+    for i in range(1, n_folds):
+        test_start = i * fold_size
+        test_end   = (i + 1) * fold_size if i < n_folds - 1 else n
+        train_end  = test_start - purge_weeks
+        if train_end < fold_size:
+            continue
+
+        test = cv_data.iloc[test_start:test_end].dropna(subset=[target])
+        if len(test) == 0:
+            continue
+
+        # Date of last row used for training (drives SARIMA cutoff)
+        train_cutoff_date = cv_data.iloc[train_end - 1]["Date"]
+
+        # Weekly return series from df_all up to the cutoff date (no target NaN issue)
+        weekly_ret = (
+            df_all[df_all["Date"] <= train_cutoff_date][weekly_ret_col]
+            .dropna()
+            .values
+        )
+        if len(weekly_ret) < max(52, 2 * steps):
+            continue
+
+        try:
+            t0    = time.time()
+            model = _fit_sarima(weekly_ret)
+            order = f"SARIMA{model.order}x{model.seasonal_order}"
+
+            # Total forecast length needed
+            offset = purge_weeks - 1          # 0-indexed: fc[offset] = return at test row 0
+            n_fc   = offset + len(test) + steps
+            fc     = model.predict(n_periods=n_fc)
+
+            preds = np.array([
+                np.sum(fc[offset + j : offset + j + steps])
+                for j in range(len(test))
+            ])
+
+            print(f"      fold {i}/{n_folds-1}  {order}  ({time.time()-t0:.0f}s)")
+
+        except Exception as e:
+            print(f"      fold {i} FAILED: {e}")
+            continue
+
+        results.append({
+            "dates":   test["Date"].values,
+            "actuals": test[target].values,
+            "preds":   preds,
+        })
+
+    return results
+
+## ── Flatten fold results ─────────────────────────────────────────────────────
+def _concat(folds, key):
+    return np.concatenate([f[key] for f in folds])
+
+## ── Main loop ────────────────────────────────────────────────────────────────
+summary = []
+
+for target, cfg in HORIZONS.items():
+    purge_wks = cfg["purge_weeks"]
+    n_folds   = cfg["n_folds"]
+    steps     = cfg["steps"]
+
+    cv_data   = (df[df["Date"] < HOLDOUT_START]
+                 .dropna(subset=[target])
+                 .copy()
+                 .reset_index(drop=True))
+    hold_data = (df[df["Date"] >= HOLDOUT_START]
+                 .dropna(subset=[target])
+                 .copy()
+                 .reset_index(drop=True))
+
+    if len(cv_data) < 100 or len(hold_data) == 0:
+        print(f"[SKIP] {target}")
         continue
 
-    X_train = train[FEATURES]
-    y_train = train[TARGET]
-    X_test  = test[FEATURES]
-    y_test  = test[TARGET].values
+    print(f"\n{'='*65}")
+    print(f"TARGET: {target}")
+    print(f"  purge={purge_wks}w  folds={n_folds}  steps={steps}"
+          f"  cv_n={len(cv_data)}  hold_n={len(hold_data)}")
 
-    for name, model in models.items():
+    # ── Random Walk baseline (predicts Δln = 0) ───────────────────────────────
+    #  RW RMSE = std(Y_h).  RW R² = r2_score(y, zeros) — typically near 0
+    #  since mean(log-return) ≈ 0.
+    rw_cv_a     = cv_data[target].values
+    rw_hld_a    = hold_data[target].values
+    rw_cv_rmse  = float(np.std(rw_cv_a))
+    rw_hld_rmse = float(np.std(rw_hld_a))
+    rw_cv_mae   = float(np.mean(np.abs(rw_cv_a)))
+    rw_hld_mae  = float(np.mean(np.abs(rw_hld_a)))
+    rw_cv_r2    = r2(rw_cv_a,  np.zeros(len(rw_cv_a)))
+    rw_hld_r2   = r2(rw_hld_a, np.zeros(len(rw_hld_a)))
+    print(f"\n  [RW]  CV  RMSE={rw_cv_rmse:.4f}  MAE={rw_cv_mae:.4f}  R²={rw_cv_r2:.4f}  Hit=50.0%")
+    print(f"  [RW]  Hld RMSE={rw_hld_rmse:.4f}  MAE={rw_hld_mae:.4f}  R²={rw_hld_r2:.4f}  Hit=50.0%")
 
-        if name == "Random Walk":
-            preds = np.zeros(len(y_test))
+    # ── CatBoost CV ──────────────────────────────────────────────────────────
+    print(f"\n  [CB]  running CV ...")
+    t0 = time.time()
+    cb_folds = cv_catboost(cv_data, target, ALL_FEAT, purge_wks, n_folds)
 
-        elif name in ("Ridge", "Lasso"):
-            scaler  = StandardScaler()
-            X_tr_sc = scaler.fit_transform(X_train.fillna(0))
-            X_te_sc = scaler.transform(X_test.fillna(0))
-            model.fit(X_tr_sc, y_train)
-            preds = model.predict(X_te_sc)
+    if cb_folds:
+        cb_cv_a    = _concat(cb_folds, "actuals")
+        cb_cv_p    = _concat(cb_folds, "preds")
+        cb_cv_rmse = rmse(cb_cv_a, cb_cv_p)
+        cb_cv_mae  = mae(cb_cv_a, cb_cv_p)
+        cb_cv_r2   = r2(cb_cv_a, cb_cv_p)
+        cb_cv_hit  = hit(cb_cv_p, cb_cv_a)
+        print(f"  [CB]  CV  RMSE={cb_cv_rmse:.4f}  MAE={cb_cv_mae:.4f}"
+              f"  R²={cb_cv_r2:.4f}  Hit={cb_cv_hit:.1%}  (n={len(cb_cv_a)}, {time.time()-t0:.0f}s)")
+    else:
+        cb_cv_rmse = cb_cv_mae = cb_cv_r2 = cb_cv_hit = None
+        print("  [CB]  CV  insufficient data")
 
-        else:
-            model.fit(X_train, y_train)
-            preds = model.predict(X_test)
+    # ── CatBoost holdout ─────────────────────────────────────────────────────
+    cb_model = CatBoostRegressor(**CB_PARAMS)
+    cb_model.fit(cv_data[ALL_FEAT], cv_data[target])
+    cb_h_p   = cb_model.predict(hold_data[ALL_FEAT])
+    cb_h_a   = hold_data[target].values
 
-        results[name]["preds"].extend(preds)
-        results[name]["actuals"].extend(y_test)
+    cb_h_rmse = rmse(cb_h_a, cb_h_p)
+    cb_h_mae  = mae(cb_h_a, cb_h_p)
+    cb_h_r2   = r2(cb_h_a, cb_h_p)
+    cb_h_hit  = hit(cb_h_p, cb_h_a)
+    print(f"  [CB]  Hld RMSE={cb_h_rmse:.4f}  MAE={cb_h_mae:.4f}"
+          f"  R²={cb_h_r2:.4f}  Hit={cb_h_hit:.1%}  (n={len(cb_h_a)})")
 
-## Print summary
-print(f"\n{'Model':<20} {'RMSE':>8}  {'R²':>8}")
-print("─" * 42)
-for name in models:
-    a = np.array(results[name]["actuals"])
-    p = np.array(results[name]["preds"])
-    mask = ~np.isnan(p)
-    print(f"{name:<20} {rmse(a[mask], p[mask]):>8.4f}  {r2(a[mask], p[mask]):>8.4f}")
+    # ── SARIMA CV ─────────────────────────────────────────────────────────────
+    print(f"\n  [SA]  running CV (m=52, seasonal) ...")
+    t0 = time.time()
+    sa_folds = cv_sarima(df, cv_data, target, WEEKLY_RET_COL,
+                         purge_wks, n_folds, steps)
+
+    if sa_folds:
+        sa_cv_a    = _concat(sa_folds, "actuals")
+        sa_cv_p    = _concat(sa_folds, "preds")
+        sa_cv_rmse = rmse(sa_cv_a, sa_cv_p)
+        sa_cv_mae  = mae(sa_cv_a, sa_cv_p)
+        sa_cv_r2   = r2(sa_cv_a, sa_cv_p)
+        sa_cv_hit  = hit(sa_cv_p, sa_cv_a)
+        print(f"  [SA]  CV  RMSE={sa_cv_rmse:.4f}  MAE={sa_cv_mae:.4f}"
+              f"  R²={sa_cv_r2:.4f}  Hit={sa_cv_hit:.1%}  (n={len(sa_cv_a)}, {time.time()-t0:.0f}s)")
+    else:
+        sa_cv_rmse = sa_cv_mae = sa_cv_r2 = sa_cv_hit = None
+        print("  [SA]  CV  insufficient data")
+
+    # ── SARIMA holdout ────────────────────────────────────────────────────────
+    #  For long horizons (e.g. Y 12m), cv_data only contains rows where the
+    #  target is not NaN — meaning it ends 52 weeks before HOLDOUT_START.
+    #  If we trained SARIMA only on cv_data's weekly returns, we'd throw away
+    #  a full year of price history. So we use ALL weekly returns from df up
+    #  to HOLDOUT_START instead.
+    #
+    #  fc[0] = return at last_training_week + 1 week.
+    #  The first holdout row may not be exactly 1 week after last_training_week
+    #  (e.g. if the data has a gap), so we compute the exact offset from dates
+    #  to correctly map fc indices to holdout rows.
+    print(f"  [SA]  running holdout ...")
+    t0 = time.time()
+
+    weekly_ret_full = (
+        df[df["Date"] < HOLDOUT_START][WEEKLY_RET_COL]
+        .dropna()
+        .reset_index(drop=True)
+    )
+    last_ret_date   = (
+        df[df["Date"] < HOLDOUT_START]
+        .dropna(subset=[WEEKLY_RET_COL])["Date"]
+        .iloc[-1]
+    )
+    hold_first_date = hold_data["Date"].iloc[0]
+    hld_gap         = max(1, round((hold_first_date - last_ret_date).days / 7))
+    hld_offset      = hld_gap - 1   # 0-indexed: fc[hld_offset] = return at first holdout row
+
+    sa_h_p = None
+    try:
+        sa_hld_model = _fit_sarima(weekly_ret_full.values)
+        order        = f"SARIMA{sa_hld_model.order}x{sa_hld_model.seasonal_order}"
+        n_fc_h       = hld_offset + len(hold_data) + steps
+        fc_h         = sa_hld_model.predict(n_periods=n_fc_h)
+
+        sa_h_p = np.array([
+            np.sum(fc_h[hld_offset + j : hld_offset + j + steps])
+            for j in range(len(hold_data))
+        ])
+        sa_h_a    = hold_data[target].values
+        sa_h_rmse = rmse(sa_h_a, sa_h_p)
+        sa_h_mae  = mae(sa_h_a, sa_h_p)
+        sa_h_r2   = r2(sa_h_a, sa_h_p)
+        sa_h_hit  = hit(sa_h_p, sa_h_a)
+        print(f"  [SA]  Hld RMSE={sa_h_rmse:.4f}  MAE={sa_h_mae:.4f}"
+              f"  R²={sa_h_r2:.4f}  Hit={sa_h_hit:.1%}  (n={len(sa_h_a)}, {order}, {time.time()-t0:.0f}s)")
+
+    except Exception as e:
+        sa_h_rmse = sa_h_mae = sa_h_r2 = sa_h_hit = None
+        print(f"  [SA]  Hld FAILED: {e}")
+
+    # ── Summary row ───────────────────────────────────────────────────────────
+    def _r(x): return round(x, 4) if x is not None else None
+    summary.append({
+        "Target":       target,
+        # Random walk baseline
+        "RW CV RMSE":   _r(rw_cv_rmse),
+        "RW CV R2":     _r(rw_cv_r2),
+        "RW Hld RMSE":  _r(rw_hld_rmse),
+        "RW Hld R2":    _r(rw_hld_r2),
+        # CatBoost
+        "CB CV RMSE":   _r(cb_cv_rmse),
+        "CB CV MAE":    _r(cb_cv_mae),
+        "CB CV R2":     _r(cb_cv_r2),
+        "CB CV Hit":    _r(cb_cv_hit),
+        "CB Hld RMSE":  _r(cb_h_rmse),
+        "CB Hld MAE":   _r(cb_h_mae),
+        "CB Hld R2":    _r(cb_h_r2),
+        "CB Hld Hit":   _r(cb_h_hit),
+        # SARIMA
+        "SA CV RMSE":   _r(sa_cv_rmse),
+        "SA CV MAE":    _r(sa_cv_mae),
+        "SA CV R2":     _r(sa_cv_r2),
+        "SA CV Hit":    _r(sa_cv_hit),
+        "SA Hld RMSE":  _r(sa_h_rmse),
+        "SA Hld MAE":   _r(sa_h_mae),
+        "SA Hld R2":    _r(sa_h_r2),
+        "SA Hld Hit":   _r(sa_h_hit),
+    })
+
+    # ── Plot holdout comparison ───────────────────────────────────────────────
+    dates  = hold_data["Date"].values
+    fig, axes = plt.subplots(2, 1, figsize=(14, 8))
+    fig.suptitle(f"{target}  —  Holdout 2022–2025", fontsize=12)
+
+    # Panel 1: predictions vs actuals
+    ax = axes[0]
+    ax.plot(dates, cb_h_a, label="Actual",      color="black", alpha=0.85, lw=1.5)
+    ax.plot(dates, cb_h_p, label="CatBoost",    alpha=0.75, lw=1.2)
+    if sa_h_p is not None:
+        ax.plot(dates, sa_h_p, label="SARIMA",  alpha=0.75, lw=1.2)
+    ax.axhline(0, color="grey", lw=0.8, linestyle="--", label="Random Walk (0)")
+    ax.set_title("Predicted vs Actual  (log-return space)")
+    ax.legend(); ax.grid(True, alpha=0.3)
+
+    # Panel 2: cumulative prediction error
+    ax = axes[1]
+    ax.plot(dates, np.cumsum((cb_h_p - cb_h_a)**2), label="CatBoost SSE", alpha=0.8)
+    if sa_h_p is not None:
+        ax.plot(dates, np.cumsum((sa_h_p - sa_h_a)**2), label="SARIMA SSE",  alpha=0.8)
+    ax.plot(dates, np.cumsum(cb_h_a**2), label="Random Walk SSE", linestyle="--",
+            color="grey", alpha=0.8)
+    ax.set_title("Cumulative Squared Error (lower = better)")
+    ax.legend(); ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    safe = target.replace("/", "-").replace(" ", "_").replace("∆", "d")
+    plt.savefig(f"Results/comparison_{safe}.png", dpi=120)
+    plt.close()
+
+## ── Summary table ────────────────────────────────────────────────────────────
+print(f"\n{'='*65}")
+print("SUMMARY  (log-return space — lower RMSE/MAE = better, higher R²/Hit = better)")
+print(f"{'='*65}")
+summary_df = pd.DataFrame(summary).set_index("Target")
+print(summary_df.to_string())
+summary_df.to_csv("Results/model_comparison_summary.csv")
+
+## ── Skill scores vs Random Walk (holdout) ────────────────────────────────────
+print(f"\n{'='*65}")
+print("SKILL SCORES vs Random Walk  (holdout, RMSE reduction %)")
+print(f"{'='*65}")
+for row in summary:
+    rw   = row["RW Hld RMSE"]
+    cb   = row["CB Hld RMSE"]
+    sa   = row.get("SA Hld RMSE")
+    cb_s = (1 - cb / rw) * 100 if cb and rw else None
+    sa_s = (1 - sa / rw) * 100 if sa and rw else None
+    cb_str = f"{cb_s:+.1f}%" if cb_s is not None else "N/A"
+    sa_str = f"{sa_s:+.1f}%" if sa_s is not None else "N/A"
+    print(f"  {row['Target']:<40}  CB={cb_str}  SA={sa_str}")
