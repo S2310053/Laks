@@ -1,7 +1,7 @@
 ##
 #  CatBoost model — all Y horizons
-#  Purged walk-forward CV (folds and purge window adjusted per horizon)
-#  Includes: random walk baseline, Diebold-Mariano test, early stopping
+#  Purged walk-forward CV with early stopping
+#  Includes: random walk baseline, Diebold-Mariano test
 #  Final holdout: 2022–2025
 #
 #  Note: Y 0w is a nowcast (S_t and F_t are Wednesday closes, simultaneously
@@ -33,41 +33,34 @@ os.makedirs("Results", exist_ok=True)
 
 ## ── Horizon config ───────────────────────────────────────────────────────────
 HORIZON_CONFIG = {
-    "0w":  {"purge_weeks":  0, "n_folds": 10},
-    "1w":  {"purge_weeks":  1, "n_folds": 10},
-    "2w":  {"purge_weeks":  2, "n_folds": 10},
-    "1m":  {"purge_weeks":  4, "n_folds": 10},
-    "3m":  {"purge_weeks": 13, "n_folds":  8},
-    "6m":  {"purge_weeks": 26, "n_folds":  6},
-    "12m": {"purge_weeks": 52, "n_folds":  4},  # Note: only ~2 valid CV folds — CV R² unreliable; rely on holdout
+    "0w":  {"purge_weeks":  0, "n_folds": 10, "depth": 4},
+    "1w":  {"purge_weeks":  1, "n_folds": 10, "depth": 4},
+    "2w":  {"purge_weeks":  2, "n_folds": 10, "depth": 4},
+    "1m":  {"purge_weeks":  4, "n_folds": 10, "depth": 5},
+    "3m":  {"purge_weeks": 13, "n_folds":  8, "depth": 5},
+    "6m":  {"purge_weeks": 26, "n_folds":  6, "depth": 6},
+    "12m": {"purge_weeks": 52, "n_folds":  4, "depth": 5},  # only ~2 valid CV folds — rely on holdout
 }
 
-def parse_horizon(target):
-    m = re.search(r"Y (\d+(?:w|m)) ", target)
-    return m.group(1) if m else "0w"
-
 ## ── CatBoost settings ────────────────────────────────────────────────────────
-CB_PARAMS = dict(
-    iterations          = 1000,     # higher ceiling; early stopping will cut this
-    learning_rate       = 0.05,
-    depth               = 6,
+CB_BASE = dict(
+    iterations          = 1000,
     loss_function       = "RMSE",
     random_seed         = 42,
     verbose             = False,
     allow_writing_files = False,
 )
 EARLY_STOP_ROUNDS = 50
-VAL_FRAC          = 0.15            # fraction of training used as early-stopping validation
+VAL_FRAC          = 0.15
 
-## ── Diebold-Mariano test (MSE loss, RW predicts 0 log return) ────────────────
+def parse_horizon(target):
+    m = re.search(r"Y (\d+(?:w|m)) ", target)
+    return m.group(1) if m else "0w"
+
+## ── Diebold-Mariano test ─────────────────────────────────────────────────────
 def diebold_mariano(actual, pred_model):
-    """
-    H0: equal MSE vs random walk (which predicts 0 log return).
-    Negative DM stat → model is more accurate than RW.
-    Returns (dm_stat, p_value).
-    """
     e_model = actual - pred_model
-    e_rw    = actual                        # RW error = actual - 0
+    e_rw    = actual
     d       = e_model**2 - e_rw**2
     n       = len(d)
     dm_stat = np.mean(d) / (np.std(d, ddof=1) / np.sqrt(n))
@@ -75,11 +68,7 @@ def diebold_mariano(actual, pred_model):
     return dm_stat, p_value
 
 ## ── Purged walk-forward CV ───────────────────────────────────────────────────
-def purged_wf_cv(data, target, features, purge_weeks, n_folds):
-    """
-    Expanding-window walk-forward CV with purging and early stopping.
-    Early stopping uses the last VAL_FRAC of each training slice as validation.
-    """
+def purged_wf_cv(data, target, features, purge_weeks, n_folds, depth):
     n         = len(data)
     fold_size = n // n_folds
     results   = []
@@ -98,15 +87,14 @@ def purged_wf_cv(data, target, features, purge_weeks, n_folds):
         if len(train) < 50 or len(test) == 0:
             continue
 
-        # Early stopping: hold out last VAL_FRAC of training
         val_size    = max(int(len(train) * VAL_FRAC), 10)
         train_inner = train.iloc[:-val_size]
         val_inner   = train.iloc[-val_size:]
 
-        model = CatBoostRegressor(**CB_PARAMS)
+        model = CatBoostRegressor(**CB_BASE, depth=depth)
         model.fit(
             train_inner[features], train_inner[target],
-            eval_set   = (val_inner[features].values, val_inner[target].values),
+            eval_set              = (val_inner[features].values, val_inner[target].values),
             early_stopping_rounds = EARLY_STOP_ROUNDS,
         )
         preds = model.predict(test[features])
@@ -124,10 +112,11 @@ def purged_wf_cv(data, target, features, purge_weeks, n_folds):
 summary = []
 
 for target in Y_COLS:
-    horizon   = parse_horizon(target)
-    cfg       = HORIZON_CONFIG.get(horizon, {"purge_weeks": 0, "n_folds": 10})
-    purge_wks = cfg["purge_weeks"]
-    n_folds   = cfg["n_folds"]
+    horizon    = parse_horizon(target)
+    cfg        = HORIZON_CONFIG.get(horizon, {"purge_weeks": 0, "n_folds": 10, "depth": 6})
+    purge_wks  = cfg["purge_weeks"]
+    n_folds    = cfg["n_folds"]
+    depth      = cfg["depth"]
     is_nowcast = (horizon == "0w")
 
     cv_data   = df[df["Date"] < HOLDOUT_START].dropna(subset=[target]).copy().reset_index(drop=True)
@@ -138,10 +127,10 @@ for target in Y_COLS:
         continue
 
     label = f"{target}  [NOWCAST]" if is_nowcast else target
-    print(f"\n{label}  (horizon={horizon}, purge={purge_wks}w, folds={n_folds})")
+    print(f"\n{label}  (horizon={horizon}, purge={purge_wks}w, folds={n_folds}, depth={depth})")
 
     ## ── Purged CV ────────────────────────────────────────────────────────────
-    fold_results = purged_wf_cv(cv_data, target, ALL_FEAT, purge_wks, n_folds)
+    fold_results = purged_wf_cv(cv_data, target, ALL_FEAT, purge_wks, n_folds, depth)
 
     if fold_results:
         cv_preds   = np.concatenate([f["preds"]   for f in fold_results])
@@ -149,7 +138,7 @@ for target in Y_COLS:
         cv_dates   = np.concatenate([f["dates"]   for f in fold_results])
 
         cv_rmse    = np.sqrt(mean_squared_error(cv_actuals, cv_preds))
-        cv_rw_rmse = np.sqrt(np.mean(cv_actuals**2))          # RW predicts 0
+        cv_rw_rmse = np.sqrt(np.mean(cv_actuals**2))
         cv_r2      = r2_score(cv_actuals, cv_preds)
         cv_hitrate = np.mean(np.sign(cv_preds) == np.sign(cv_actuals))
         print(f"  CV       RMSE={cv_rmse:.4f}  RW_RMSE={cv_rw_rmse:.4f}  "
@@ -160,12 +149,12 @@ for target in Y_COLS:
         cv_preds, cv_actuals, cv_dates = [], [], []
         print("  CV       insufficient data for all folds")
 
-    ## ── Final model: train on full CV period, evaluate on holdout ────────────
-    val_size_final    = max(int(len(cv_data) * VAL_FRAC), 10)
-    cv_train_final    = cv_data.iloc[:-val_size_final]
-    cv_val_final      = cv_data.iloc[-val_size_final:]
+    ## ── Final model — trained on full CV period ──────────────────────────────
+    val_size_final = max(int(len(cv_data) * VAL_FRAC), 10)
+    cv_train_final = cv_data.iloc[:-val_size_final]
+    cv_val_final   = cv_data.iloc[-val_size_final:]
 
-    final_model = CatBoostRegressor(**CB_PARAMS)
+    final_model = CatBoostRegressor(**CB_BASE, depth=depth)
     final_model.fit(
         cv_train_final[ALL_FEAT], cv_train_final[target],
         eval_set              = (cv_val_final[ALL_FEAT].values, cv_val_final[target].values),
@@ -185,21 +174,21 @@ for target in Y_COLS:
           f"DM={dm_stat:.2f}  p={dm_p:.3f}")
 
     summary.append({
-        "Y":            target,
-        "Horizon":      horizon,
-        "Nowcast":      is_nowcast,
-        "CV RMSE":      cv_rmse,
-        "CV RW RMSE":   cv_rw_rmse,
-        "CV R2":        cv_r2,
-        "CV Hit":       cv_hitrate,
-        "Hold RMSE":    hold_rmse,
-        "Hold RW RMSE": hold_rw_rmse,
-        "Hold R2":      hold_r2,
-        "Hold Hit":     hold_hitrate,
-        "Hold DM":      dm_stat,
-        "Hold DM p":    dm_p,
-        "n_train":      len(cv_data),
-        "n_holdout":    len(hold_data),
+        "Y":             target,
+        "Horizon":       horizon,
+        "Nowcast":       is_nowcast,
+        "CV RMSE":       cv_rmse,
+        "CV RW RMSE":    cv_rw_rmse,
+        "CV R2":         cv_r2,
+        "CV Hit":        cv_hitrate,
+        "Hold RMSE":     hold_rmse,
+        "Hold RW RMSE":  hold_rw_rmse,
+        "Hold R2":       hold_r2,
+        "Hold Hit":      hold_hitrate,
+        "Hold DM":       dm_stat,
+        "Hold DM p":     dm_p,
+        "n_train":       len(cv_data),
+        "n_holdout":     len(hold_data),
     })
 
     ## ── Feature importance ───────────────────────────────────────────────────
@@ -233,7 +222,7 @@ for target in Y_COLS:
     ax_idx += 1
 
     importance.head(20).sort_values().plot(kind="barh", ax=axes[ax_idx])
-    axes[ax_idx].set_title("Top 20 feature importances (trained on full CV period)")
+    axes[ax_idx].set_title(f"Top 20 feature importances (depth={depth})")
     axes[ax_idx].grid(True, alpha=0.3)
 
     plt.tight_layout()
