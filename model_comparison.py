@@ -127,21 +127,25 @@ def cv_catboost(cv_data, target, features, purge_weeks, n_folds):
 ## ── Purged walk-forward CV: SARIMA ───────────────────────────────────────────
 #
 #  SARIMA is univariate: input = weekly log-return r_t (Y_0w column).
-#  Training series is date-filtered from df_all (avoids NaN contamination
-#  from multi-step target construction in cv_data).
 #
-#  Forecast indexing:
-#    fc[0]   = r_{train_cutoff + 1w}   (1-step-ahead)
-#    fc[k]   = r_{train_cutoff + (k+1)w}
+#  Parameters are estimated ONCE per fold on weekly returns up to the purged
+#  train_cutoff_date. For each test observation at date t:
+#    (1) Apply fitted parameters to the ACTUAL observed weekly-return history
+#        r_1, ..., r_t  (no parameter re-estimation — `apply(refit=False)`)
+#    (2) Forecast r_{t+1}, ..., r_{t+steps}
+#    (3) Sum → prediction of Y_h at date t
 #
-#  Test row j is at train_cutoff + purge_weeks + j weeks (weekly data):
-#    Y_h at test row j = Σ r from row j to row j+steps-1
-#                      = Σ fc[ purge_weeks-1+j  :  purge_weeks-1+j+steps ]
+#  This is analogous to how CatBoost gets fresh feature values at each test
+#  date: the model's parameters are locked to pre-test data, but predictions
+#  condition on actual observations available at time t.
 #
 def cv_sarima(df_all, cv_data, target, weekly_ret_col, purge_weeks, n_folds, steps):
     n         = len(cv_data)
     fold_size = n // n_folds
     results   = []
+
+    # All weekly returns (with dates) — used for conditioning at each test date
+    ret_series = df_all.dropna(subset=[weekly_ret_col])[["Date", weekly_ret_col]].reset_index(drop=True)
 
     for i in range(1, n_folds):
         test_start = i * fold_size
@@ -157,29 +161,28 @@ def cv_sarima(df_all, cv_data, target, weekly_ret_col, purge_weeks, n_folds, ste
         # Date of last row used for training (drives SARIMA cutoff)
         train_cutoff_date = cv_data.iloc[train_end - 1]["Date"]
 
-        # Weekly return series from df_all up to the cutoff date (no target NaN issue)
-        weekly_ret = (
-            df_all[df_all["Date"] <= train_cutoff_date][weekly_ret_col]
-            .dropna()
-            .values
-        )
-        if len(weekly_ret) < max(52, 2 * steps):
+        # Training weekly returns: up to purged cutoff (parameters see only this)
+        train_mask       = ret_series["Date"] <= train_cutoff_date
+        weekly_ret_train = ret_series.loc[train_mask, weekly_ret_col].values
+        if len(weekly_ret_train) < max(52, 2 * steps):
             continue
 
         try:
-            t0    = time.time()
-            model = _fit_sarima(weekly_ret)
-            order = f"SARIMA{model.order}x{model.seasonal_order}"
+            t0     = time.time()
+            model  = _fit_sarima(weekly_ret_train)
+            order  = f"SARIMA{model.order}x{model.seasonal_order}"
+            sm_res = model.arima_res_
 
-            # Total forecast length needed
-            offset = purge_weeks - 1          # 0-indexed: fc[offset] = return at test row 0
-            n_fc   = offset + len(test) + steps
-            fc     = model.predict(n_periods=n_fc)
-
-            preds = np.array([
-                np.sum(fc[offset + j : offset + j + steps])
-                for j in range(len(test))
-            ])
+            preds = np.zeros(len(test))
+            for j, t_date in enumerate(test["Date"].values):
+                # Target at t is Σ r_t, r_{t+1}, ..., r_{t+steps-1}
+                # Condition on r_1, ..., r_{t-1} (strictly before t)
+                # Forecast r_t, ..., r_{t+steps-1}, sum
+                mask_t  = ret_series["Date"] < t_date
+                history = ret_series.loc[mask_t, weekly_ret_col].values
+                applied = sm_res.apply(history, refit=False)
+                fc      = applied.forecast(steps=steps)
+                preds[j] = float(np.sum(fc))
 
             print(f"      fold {i}/{n_folds-1}  {order}  ({time.time()-t0:.0f}s)")
 
@@ -290,16 +293,13 @@ for target, cfg in HORIZONS.items():
         print("  [SA]  CV  insufficient data")
 
     # ── SARIMA holdout ────────────────────────────────────────────────────────
-    #  For long horizons (e.g. Y 12m), cv_data only contains rows where the
-    #  target is not NaN — meaning it ends 52 weeks before HOLDOUT_START.
-    #  If we trained SARIMA only on cv_data's weekly returns, we'd throw away
-    #  a full year of price history. So we use ALL weekly returns from df up
-    #  to HOLDOUT_START instead.
+    #  Parameters fit ONCE on all weekly returns strictly before HOLDOUT_START.
+    #  For each holdout date t, condition on the ACTUAL observed weekly-return
+    #  history r_1, ..., r_t (via statsmodels `apply(refit=False)`), then
+    #  forecast r_{t+1}, ..., r_{t+steps} and sum.
     #
-    #  fc[0] = return at last_training_week + 1 week.
-    #  The first holdout row may not be exactly 1 week after last_training_week
-    #  (e.g. if the data has a gap), so we compute the exact offset from dates
-    #  to correctly map fc indices to holdout rows.
+    #  This matches what CatBoost does: locked parameters from the training
+    #  period, but fresh conditioning information at each prediction date.
     print(f"  [SA]  running holdout ...")
     t0 = time.time()
 
@@ -308,26 +308,27 @@ for target, cfg in HORIZONS.items():
         .dropna()
         .reset_index(drop=True)
     )
-    last_ret_date   = (
-        df[df["Date"] < HOLDOUT_START]
-        .dropna(subset=[WEEKLY_RET_COL])["Date"]
-        .iloc[-1]
+    ret_series_full = (
+        df.dropna(subset=[WEEKLY_RET_COL])[["Date", WEEKLY_RET_COL]]
+        .reset_index(drop=True)
     )
-    hold_first_date = hold_data["Date"].iloc[0]
-    hld_gap         = max(1, round((hold_first_date - last_ret_date).days / 7))
-    hld_offset      = hld_gap - 1   # 0-indexed: fc[hld_offset] = return at first holdout row
 
     sa_h_p = None
     try:
         sa_hld_model = _fit_sarima(weekly_ret_full.values)
         order        = f"SARIMA{sa_hld_model.order}x{sa_hld_model.seasonal_order}"
-        n_fc_h       = hld_offset + len(hold_data) + steps
-        fc_h         = sa_hld_model.predict(n_periods=n_fc_h)
+        sm_res       = sa_hld_model.arima_res_
 
-        sa_h_p = np.array([
-            np.sum(fc_h[hld_offset + j : hld_offset + j + steps])
-            for j in range(len(hold_data))
-        ])
+        sa_h_p = np.zeros(len(hold_data))
+        for j, t_date in enumerate(hold_data["Date"].values):
+            # Target at t is Σ r_t, ..., r_{t+steps-1}
+            # Condition on r_1, ..., r_{t-1} (strictly before t), forecast steps ahead
+            mask_t  = ret_series_full["Date"] < t_date
+            history = ret_series_full.loc[mask_t, WEEKLY_RET_COL].values
+            applied = sm_res.apply(history, refit=False)
+            fc      = applied.forecast(steps=steps)
+            sa_h_p[j] = float(np.sum(fc))
+
         sa_h_a    = hold_data[target].values
         sa_h_rmse = rmse(sa_h_a, sa_h_p)
         sa_h_mae  = mae(sa_h_a, sa_h_p)
