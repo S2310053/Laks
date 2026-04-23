@@ -42,4 +42,8 @@ eda.report()
 #print(data.columns)
 #print(data.info())
 
-Factors[Factors["Date"] >= "2006-01-01"].to_csv(r"/Users/fillipaskildsen/Documents/GitHub/Data/Factors.csv", index = False)
+import os as _os
+_out = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "Data", "Factors.csv")
+_os.makedirs(_os.path.dirname(_out), exist_ok=True)
+Factors[Factors["Date"] >= "2006-01-01"].to_csv(_out, index=False)
+print(f"Factors.csv saved → {_out}")
