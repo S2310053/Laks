@@ -436,6 +436,15 @@ class featureEngineer:
         out["∆ Salmon (NOK/KG) 6m"]  = _dln_spot.rolling(26).mean().shift(1)
         out["∆ Salmon (NOK/KG) 12m"] = _dln_spot.rolling(52).mean().shift(1)
 
+        # ── 1b. Realized volatility: rolling std of Δln(spot) ────────────
+        #    Captures current vol regime — lets models scale predictions up
+        #    during seasonal peaks / supply shocks.
+        #    4w  = fast signal (onset of volatile period)
+        #    13w = slow signal (sustained seasonal high-vol window)
+        #    shift(1) avoids look-ahead: vol at t uses r_{t-1}, ..., r_{t-k}
+        out["RVol 4w"]  = _dln_spot.rolling(4).std().shift(1)
+        out["RVol 13w"] = _dln_spot.rolling(13).std().shift(1)
+
         # ── 2. FP–SSB spread — reconstruct contemporaneous SSB by undoing the
         #       1-week publication lag (shift(-1)), compute ln(FP_t / SSB_t),
         #       then shift(1) so row t shows last week's spread (first available)

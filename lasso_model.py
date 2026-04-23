@@ -33,7 +33,8 @@ Y_COLS   = [c for c in df.columns if c.startswith("Y ")]
 NON_FEAT = {"Date"} | set(Y_COLS)
 ALL_FEAT = [c for c in df.columns if c not in NON_FEAT]
 
-os.makedirs("Results", exist_ok=True)
+RESULTS_DIR = "Results/Lasso"
+os.makedirs(RESULTS_DIR, exist_ok=True)
 
 ## ── Horizon config ───────────────────────────────────────────────────────────
 HORIZON_CONFIG = {
@@ -262,11 +263,55 @@ for target in Y_COLS:
 
     plt.tight_layout()
     safe_name = target.replace("/", "-").replace(" ", "_").replace("∆", "d")
-    plt.savefig(f"Results/lasso_{safe_name}.png", dpi=120)
+    plt.savefig(f"{RESULTS_DIR}/lasso_{safe_name}.pdf", format="pdf", bbox_inches="tight")
     plt.close()
 
 ## ── Summary table ────────────────────────────────────────────────────────────
 print("\n── Summary ──────────────────────────────────────────────────────────")
 summary_df = pd.DataFrame(summary).set_index("Y")
 print(summary_df.to_string())
-summary_df.to_csv("Results/lasso_summary.csv")
+summary_df.to_csv(f"{RESULTS_DIR}/lasso_summary.csv")
+
+## ── PDF results table ────────────────────────────────────────────────────────
+def _fmt(x, fmt=".4f"):
+    return f"{x:{fmt}}" if pd.notna(x) else "—"
+
+disp = pd.DataFrame({
+    "Horizon":    [r["Horizon"] for r in summary],
+    "CV RMSE":    [_fmt(r["CV RMSE"]) for r in summary],
+    "CV R²":      [_fmt(r["CV R2"], ".3f") for r in summary],
+    "CV Hit":     [f'{r["CV Hit"]:.1%}' if r["CV Hit"] else "—" for r in summary],
+    "Hold RMSE":  [_fmt(r["Hold RMSE"]) for r in summary],
+    "Hold R²":    [_fmt(r["Hold R2"], ".3f") for r in summary],
+    "Hold Hit":   [f'{r["Hold Hit"]:.1%}' if r["Hold Hit"] else "—" for r in summary],
+    "RW RMSE":    [_fmt(r["Hold RW RMSE"]) for r in summary],
+    "Skill %":    [f'{(1 - r["Hold RMSE"]/r["Hold RW RMSE"])*100:+.1f}%' for r in summary],
+    "DM":         [_fmt(r["Hold DM"], ".2f") for r in summary],
+    "p-value":    [f'{r["Hold DM p"]:.4f}' if r["Hold DM p"] >= 0.001
+                   else "< 0.001" for r in summary],
+    "α":          [f'{r["Best Alpha"]:.5f}' for r in summary],
+    "Nonzero":    [f'{r["Nonzero Coefs"]}/{r["Total Features"]}' for r in summary],
+})
+
+fig, ax = plt.subplots(figsize=(18, len(disp) * 0.55 + 2.5))
+ax.axis("off")
+ax.set_title("Lasso — Results Summary\nHoldout: 2022–2025  |  Purged Walk-Forward CV  |  LassoCV (TimeSeriesSplit)",
+             fontsize=13, fontweight="bold", pad=20)
+
+table = ax.table(cellText=disp.values, colLabels=disp.columns,
+                 loc="center", cellLoc="center")
+table.auto_set_font_size(False)
+table.set_fontsize(9)
+table.scale(1, 1.8)
+
+for j in range(len(disp.columns)):
+    table[0, j].set_facecolor("#2c3e50")
+    table[0, j].set_text_props(color="white", fontweight="bold")
+for i in range(1, len(disp) + 1):
+    color = "#f0f4f8" if i % 2 == 0 else "white"
+    for j in range(len(disp.columns)):
+        table[i, j].set_facecolor(color)
+
+plt.savefig(f"{RESULTS_DIR}/lasso_results.pdf", format="pdf", bbox_inches="tight", dpi=150)
+plt.close()
+print(f"PDF saved → {RESULTS_DIR}/lasso_results.pdf")
