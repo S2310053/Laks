@@ -17,11 +17,11 @@ import re, os
 from sklearn.linear_model import LassoCV
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import TimeSeriesSplit
-from sklearn.metrics import mean_squared_error, r2_score
-from scipy import stats
 import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
+from metrics import Metrics
+from plotter import Plotter
 
 ## ── Load data ────────────────────────────────────────────────────────────────
 df = pd.read_csv("Data/Factors.csv", parse_dates=["Date"])
@@ -58,16 +58,6 @@ MAX_ITER    = 10_000
 def parse_horizon(target):
     m = re.search(r"Y (\d+(?:w|m)) ", target)
     return m.group(1) if m else "0w"
-
-## ── Diebold-Mariano test (vs random walk: predict 0) ─────────────────────────
-def diebold_mariano(actual, pred_model):
-    e_model = actual - pred_model
-    e_rw    = actual                   # random walk predicts 0 → error = actual
-    d       = e_model**2 - e_rw**2
-    n       = len(d)
-    dm_stat = np.mean(d) / (np.std(d, ddof=1) / np.sqrt(n))
-    p_value = 2 * stats.norm.sf(np.abs(dm_stat))
-    return dm_stat, p_value
 
 ## ── Purged walk-forward CV ───────────────────────────────────────────────────
 def purged_wf_cv(data, target, features, purge_weeks, n_folds):
@@ -152,10 +142,10 @@ for target in Y_COLS:
         cv_alphas   = [f["best_alpha"] for f in fold_results]
         cv_nonzeros = [f["n_nonzero"]  for f in fold_results]
 
-        cv_rmse    = np.sqrt(mean_squared_error(cv_actuals, cv_preds))
-        cv_rw_rmse = np.sqrt(np.mean(cv_actuals**2))
-        cv_r2      = r2_score(cv_actuals, cv_preds)
-        cv_hitrate = np.mean(np.sign(cv_preds) == np.sign(cv_actuals))
+        cv_rmse    = Metrics.rmse(cv_actuals, cv_preds)
+        cv_rw_rmse = Metrics.rw_rmse(cv_actuals)
+        cv_r2      = Metrics.r2(cv_actuals, cv_preds)
+        cv_hitrate = Metrics.hit_rate(cv_actuals, cv_preds)
 
         print(f"  CV       RMSE={cv_rmse:.4f}  RW_RMSE={cv_rw_rmse:.4f}  "
               f"R²={cv_r2:.4f}  Hit={cv_hitrate:.1%}  "
@@ -190,11 +180,11 @@ for target in Y_COLS:
 
     hold_preds   = final_model.predict(X_hold_sc)
     hold_actuals = hold_data[target].values
-    hold_rmse    = np.sqrt(mean_squared_error(hold_actuals, hold_preds))
-    hold_rw_rmse = np.sqrt(np.mean(hold_actuals**2))
-    hold_r2      = r2_score(hold_actuals, hold_preds)
-    hold_hitrate = np.mean(np.sign(hold_preds) == np.sign(hold_actuals))
-    dm_stat, dm_p = diebold_mariano(hold_actuals, hold_preds)
+    hold_rmse    = Metrics.rmse(hold_actuals, hold_preds)
+    hold_rw_rmse = Metrics.rw_rmse(hold_actuals)
+    hold_r2      = Metrics.r2(hold_actuals, hold_preds)
+    hold_hitrate = Metrics.hit_rate(hold_actuals, hold_preds)
+    dm_stat, dm_p = Metrics.diebold_mariano(hold_actuals, hold_preds)
 
     n_nonzero_final = int(np.sum(final_model.coef_ != 0))
     best_alpha      = final_model.alpha_
@@ -273,45 +263,26 @@ print(summary_df.to_string())
 summary_df.to_csv(f"{RESULTS_DIR}/lasso_summary.csv")
 
 ## ── PDF results table ────────────────────────────────────────────────────────
-def _fmt(x, fmt=".4f"):
-    return f"{x:{fmt}}" if pd.notna(x) else "—"
-
 disp = pd.DataFrame({
     "Horizon":    [r["Horizon"] for r in summary],
-    "CV RMSE":    [_fmt(r["CV RMSE"]) for r in summary],
-    "CV R²":      [_fmt(r["CV R2"], ".3f") for r in summary],
+    "CV RMSE":    [Metrics.fmt(r["CV RMSE"]) for r in summary],
+    "CV R²":      [Metrics.fmt(r["CV R2"], ".3f") for r in summary],
     "CV Hit":     [f'{r["CV Hit"]:.1%}' if r["CV Hit"] else "—" for r in summary],
-    "Hold RMSE":  [_fmt(r["Hold RMSE"]) for r in summary],
-    "Hold R²":    [_fmt(r["Hold R2"], ".3f") for r in summary],
+    "Hold RMSE":  [Metrics.fmt(r["Hold RMSE"]) for r in summary],
+    "Hold R²":    [Metrics.fmt(r["Hold R2"], ".3f") for r in summary],
     "Hold Hit":   [f'{r["Hold Hit"]:.1%}' if r["Hold Hit"] else "—" for r in summary],
-    "RW RMSE":    [_fmt(r["Hold RW RMSE"]) for r in summary],
+    "RW RMSE":    [Metrics.fmt(r["Hold RW RMSE"]) for r in summary],
     "Skill %":    [f'{(1 - r["Hold RMSE"]/r["Hold RW RMSE"])*100:+.1f}%' for r in summary],
-    "DM":         [_fmt(r["Hold DM"], ".2f") for r in summary],
+    "DM":         [Metrics.fmt(r["Hold DM"], ".2f") for r in summary],
     "p-value":    [f'{r["Hold DM p"]:.4f}' if r["Hold DM p"] >= 0.001
                    else "< 0.001" for r in summary],
     "α":          [f'{r["Best Alpha"]:.5f}' for r in summary],
     "Nonzero":    [f'{r["Nonzero Coefs"]}/{r["Total Features"]}' for r in summary],
 })
 
-fig, ax = plt.subplots(figsize=(18, len(disp) * 0.55 + 2.5))
-ax.axis("off")
-ax.set_title("Lasso — Results Summary\nHoldout: 2022–2025  |  Purged Walk-Forward CV  |  LassoCV (TimeSeriesSplit)",
-             fontsize=13, fontweight="bold", pad=20)
-
-table = ax.table(cellText=disp.values, colLabels=disp.columns,
-                 loc="center", cellLoc="center")
-table.auto_set_font_size(False)
-table.set_fontsize(9)
-table.scale(1, 1.8)
-
-for j in range(len(disp.columns)):
-    table[0, j].set_facecolor("#2c3e50")
-    table[0, j].set_text_props(color="white", fontweight="bold")
-for i in range(1, len(disp) + 1):
-    color = "#f0f4f8" if i % 2 == 0 else "white"
-    for j in range(len(disp.columns)):
-        table[i, j].set_facecolor(color)
-
-plt.savefig(f"{RESULTS_DIR}/lasso_results.pdf", format="pdf", bbox_inches="tight", dpi=150)
-plt.close()
-print(f"PDF saved → {RESULTS_DIR}/lasso_results.pdf")
+Plotter().results_table(
+    disp,
+    "Lasso — Results Summary\nHoldout: 2022–2025  |  Purged Walk-Forward CV  |  LassoCV (TimeSeriesSplit)",
+    f"{RESULTS_DIR}/lasso_results.pdf",
+    width=18,
+)

@@ -16,7 +16,7 @@ from pandas.tseries.offsets import MonthEnd
 #  constructs variables used by the models
 #
 
-class featureEngineer:
+class FeatureEngineer:
 
     ## Defines weekly variables with fixed row-shift publication lags.
     #  Lag = number of Wednesday steps to shift forward.
@@ -389,6 +389,9 @@ class featureEngineer:
     def buildFeatureMatrix(self,
                            data: pd.DataFrame,
                            smolt_lag: int = 65) -> pd.DataFrame:
+
+        data = self._lagByPublication(data)
+        self.validatePublicationLags(data)
 
         df   = data.copy()
         spot = df["Salmon_NOK_kg_FP_Weekly"]

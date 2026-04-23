@@ -1,49 +1,57 @@
-## 
-#  This program implements the stage of modelling
-#
-
 ##
-# Imports libraries needed
+#  Entry point — orchestrates the full data pipeline
 #
-from data_loader import DataLoader
-from feature_engineer import featureEngineer
-from eda import EDA
+#  Stage 0: Load raw data        (DataLoader)
+#  Stage 1: Build feature matrix (FeatureEngineer — lags + transforms internally)
+#  Stage 2: EDA                  (EDA — commented out, run separately)
+#  Stage 3: Export Factors.csv   (consumed by model scripts)
+##
 
+import os
 import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 import numpy as np
-
 import pandas as pd
 import seaborn as sns
 
-##
-# Loads the data
-#
-loadData              = DataLoader()
-feature               = featureEngineer()
+from data_loader import DataLoader
+from feature_engineer import FeatureEngineer
+from eda import EDA
 
-data = loadData.Data()
-loadData.ValidateData(data)
-data = feature._lagByPublication(data)
-feature.validatePublicationLags(data)
+## ── Pipeline configuration ───────────────────────────────────────────────────
+#  DATA_START    : earliest row kept after building the feature matrix.
+#                  Set 2 years before EXPORT_START to warm up rolling features
+#                  (52-week rolling windows need ~1 year; 2 years gives margin).
+#  EXPORT_START  : first row written to Factors.csv and used by model scripts.
+#                  2006 ensures all rolling features are fully populated.
+DATA_START   = "2004-01-01"
+DATA_END     = "2025-12-31"
+EXPORT_START = "2006-01-01"
+
+## ── Stage 0: Load raw data ───────────────────────────────────────────────────
+loader  = DataLoader()
+feature = FeatureEngineer()
+
+data = loader.Data()
+loader.ValidateData(data)
+
+## ── Stage 1: Build feature matrix ────────────────────────────────────────────
+#  buildFeatureMatrix() applies publication lags and validates them internally.
 Factors, freq_map = feature.buildFeatureMatrix(data)
 feature.validateFeatureMatrix(Factors)
 
 Factors = Factors[
-    (Factors["Date"] >= "2004-01-01") &
-    (Factors["Date"] <= "2025-12-31")
+    (Factors["Date"] >= DATA_START) &
+    (Factors["Date"] <= DATA_END)
 ].reset_index(drop=True)
 
+## ── Stage 2: EDA (run separately when needed) ────────────────────────────────
 # eda = EDA(Factors, freq_map=freq_map)
 # eda.report()
 
-#print(data)
-#print(data.columns)
-#print(data.info())
-
-import os as _os
-_out = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "Data", "Factors.csv")
-_os.makedirs(_os.path.dirname(_out), exist_ok=True)
-Factors[Factors["Date"] >= "2006-01-01"].to_csv(_out, index=False)
-print(f"Factors.csv saved → {_out}")
+## ── Stage 3: Export ──────────────────────────────────────────────────────────
+out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Data", "Factors.csv")
+os.makedirs(os.path.dirname(out_path), exist_ok=True)
+Factors[Factors["Date"] >= EXPORT_START].to_csv(out_path, index=False)
+print(f"Factors.csv saved → {out_path}")

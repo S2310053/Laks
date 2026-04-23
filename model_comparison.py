@@ -21,6 +21,8 @@ import os
 import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
+from metrics import Metrics
+from plotter import Plotter
 
 RESULTS_DIR = "Results/Comparison"
 os.makedirs(RESULTS_DIR, exist_ok=True)
@@ -75,7 +77,7 @@ for hz in HORIZON_ORDER:
         rw_rmse   = r.get("Hold RW RMSE", None)
         dm_p      = r.get("Hold DM p", None)
 
-        skill = (1 - hold_rmse / rw_rmse) * 100 if pd.notna(hold_rmse) and pd.notna(rw_rmse) and rw_rmse > 0 else None
+        skill = Metrics.skill_score(hold_rmse, rw_rmse) if pd.notna(hold_rmse) and pd.notna(rw_rmse) else None
 
         row[f"{name} R²"]    = hold_r2
         row[f"{name} Hit"]   = hold_hit
@@ -89,11 +91,6 @@ print(comp_df.to_string(index=False))
 comp_df.to_csv(f"{RESULTS_DIR}/comparison_summary.csv", index=False)
 
 ## ── PDF: Combined results table ─────────────────────────────────────────────
-def _fmt(x, fmt=".3f"):
-    if pd.isna(x) or x is None:
-        return "—"
-    return f"{x:{fmt}}"
-
 def _fmt_pct(x):
     if pd.isna(x) or x is None:
         return "—"
@@ -116,37 +113,19 @@ disp_cols = ["Horizon"]
 disp_data = {"Horizon": [r["Horizon"] for r in rows]}
 
 for name in model_names:
-    disp_data[f"{name} R²"]    = [_fmt(r.get(f"{name} R²"))    for r in rows]
+    disp_data[f"{name} R²"]    = [Metrics.fmt(r.get(f"{name} R²"), ".3f") for r in rows]
     disp_data[f"{name} Hit"]   = [_fmt_pct(r.get(f"{name} Hit")) for r in rows]
     disp_data[f"{name} Skill"] = [_fmt_skill(r.get(f"{name} Skill")) for r in rows]
 
 disp = pd.DataFrame(disp_data)
 
-fig, ax = plt.subplots(figsize=(max(16, len(disp.columns) * 1.5), len(disp) * 0.6 + 3))
-ax.axis("off")
-ax.set_title("Model Comparison — Holdout 2022–2025\nR², Hit Rate, and Skill vs Random Walk",
-             fontsize=14, fontweight="bold", pad=25)
-
-table = ax.table(cellText=disp.values, colLabels=disp.columns,
-                 loc="center", cellLoc="center")
-table.auto_set_font_size(False)
-table.set_fontsize(8)
-table.scale(1, 1.8)
-
-# Style header
-for j in range(len(disp.columns)):
-    table[0, j].set_facecolor("#2c3e50")
-    table[0, j].set_text_props(color="white", fontweight="bold")
-
-# Alternating rows
-for i in range(1, len(disp) + 1):
-    color = "#f0f4f8" if i % 2 == 0 else "white"
-    for j in range(len(disp.columns)):
-        table[i, j].set_facecolor(color)
-
-plt.savefig(f"{RESULTS_DIR}/comparison_table.pdf", format="pdf", bbox_inches="tight", dpi=150)
-plt.close()
-print(f"\nPDF saved → {RESULTS_DIR}/comparison_table.pdf")
+Plotter().results_table(
+    disp,
+    "Model Comparison — Holdout 2022–2025\nR², Hit Rate, and Skill vs Random Walk",
+    f"{RESULTS_DIR}/comparison_table.pdf",
+    width=max(16, len(disp.columns) * 1.5),
+)
+print()
 
 ## ── Bar chart: Holdout R² by horizon ────────────────────────────────────────
 fig, axes = plt.subplots(3, 1, figsize=(14, 16))
