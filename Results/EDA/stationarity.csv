@@ -1,0 +1,98 @@
+Feature,ADF,p-value,Crit 1%,Crit 5%,Result
+∆ Salmon (NOK/KG) 1w,-28.023,0.0,-3.437,-2.864,I(0) ok
+∆ Salmon (NOK/KG) 2w,-9.071,0.0,-3.437,-2.864,I(0) ok
+∆ Salmon (NOK/KG) 1m,-9.163,0.0,-3.437,-2.864,I(0) ok
+∆ Salmon (NOK/KG) 3m,-9.181,0.0,-3.437,-2.864,I(0) ok
+∆ Salmon (NOK/KG) 6m,-9.662,0.0,-3.437,-2.864,I(0) ok
+∆ Salmon (NOK/KG) 12m,-4.357,0.0004,-3.437,-2.864,I(0) ok
+RVol 4w,-8.987,0.0,-3.437,-2.864,I(0) ok
+RVol 13w,-5.602,0.0,-3.437,-2.864,I(0) ok
+RVol 52w,-3.004,0.0345,-3.437,-2.864,I(0) ok
+Spread (FP - SSB),-6.85,0.0,-3.437,-2.864,I(0) ok
+∆ Spread (FP - SSB),-10.846,0.0,-3.437,-2.864,I(0) ok
+FWD 1m,-8.377,0.0,-3.437,-2.864,I(0) ok
+∆ FWD 1m,-19.031,0.0,-3.437,-2.864,I(0) ok
+FWD 3m,-9.087,0.0,-3.437,-2.864,I(0) ok
+∆ FWD 3m,-29.141,0.0,-3.437,-2.864,I(0) ok
+FWD 6m,-9.947,0.0,-3.437,-2.864,I(0) ok
+∆ FWD 6m,-9.321,0.0,-3.437,-2.864,I(0) ok
+FWD 12m,-6.731,0.0,-3.437,-2.864,I(0) ok
+∆ FWD 12m,-21.965,0.0,-3.437,-2.864,I(0) ok
+FWD Slope,-5.99,0.0,-3.437,-2.865,I(0) ok
+FWD Curvature,-8.686,0.0,-3.437,-2.865,I(0) ok
+∆ Export Volume 1w,-9.714,0.0,-3.437,-2.864,I(0) ok
+∆ Export Volume 2w,-9.815,0.0,-3.437,-2.864,I(0) ok
+∆ Export Volume 1m,-9.64,0.0,-3.437,-2.864,I(0) ok
+∆ Chilean Exports 1w,-9.702,0.0,-3.437,-2.864,I(0) ok
+∆ Chilean Exports 2w,-7.784,0.0,-3.437,-2.864,I(0) ok
+∆ Chilean Exports 1m,-7.732,0.0,-3.437,-2.864,I(0) ok
+∆ Chilean Exports 3m,-9.252,0.0,-3.437,-2.864,I(0) ok
+∆ Total Biomass Monthly,-3.976,0.0015,-3.459,-2.874,I(0) ok
+∆YOY Total Biomass Monthly,-3.648,0.0049,-3.459,-2.874,I(0) ok
+Avg Weight (KG) Monthly,-2.9,0.0453,-3.459,-2.874,I(0) ok
+YOY Avg Weight (KG) Monthly,-4.353,0.0004,-3.459,-2.874,I(0) ok
+Harvest Intensity 1m Monthly,-1.609,0.4791,-3.459,-2.874,! Non-stationary
+Harvest Intensity 3m Monthly,-0.751,0.8331,-3.459,-2.874,! Non-stationary
+Loss Rate 1m Monthly,-2.455,0.1269,-3.459,-2.874,! Non-stationary
+Loss Rate 3m Monthly,-2.484,0.1195,-3.459,-2.874,! Non-stationary
+Loss Rate 6m Monthly,-2.639,0.0851,-3.458,-2.874,! Non-stationary
+Smolt Release 2m Monthly,-2.172,0.2166,-3.459,-2.874,! Non-stationary
+Smolt Release 3m Monthly,-2.272,0.1813,-3.459,-2.874,! Non-stationary
+Smolt Release 4m Monthly,-2.325,0.1641,-3.459,-2.874,! Non-stationary
+Smolt Release 5m Monthly,-2.265,0.1834,-3.459,-2.874,! Non-stationary
+Smolt Release 6m Monthly,-2.278,0.1793,-3.459,-2.874,! Non-stationary
+Smolt Release 7m Monthly,-2.26,0.1852,-3.459,-2.874,! Non-stationary
+Smolt Release 8m Monthly,-2.245,0.1903,-3.459,-2.874,! Non-stationary
+Smolt Release 9m Monthly,-2.26,0.1853,-3.459,-2.874,! Non-stationary
+Smolt Release 10m Monthly,-2.253,0.1877,-3.459,-2.874,! Non-stationary
+Smolt Release 11m Monthly,-2.268,0.1825,-3.459,-2.874,! Non-stationary
+Smolt Release 12m Monthly,-2.261,0.1849,-3.459,-2.874,! Non-stationary
+Smolt Release 13m Monthly,-2.272,0.181,-3.459,-2.874,! Non-stationary
+Smolt Release 14m Monthly,-2.3,0.1721,-3.459,-2.874,! Non-stationary
+Smolt Release 15m Monthly,-2.294,0.174,-3.46,-2.874,! Non-stationary
+Smolt Release 16m Monthly,-2.27,0.1818,-3.46,-2.874,! Non-stationary
+Smolt Release 17m Monthly,-2.262,0.1844,-3.46,-2.875,! Non-stationary
+Smolt Release 18m Monthly,-2.247,0.1896,-3.46,-2.875,! Non-stationary
+ISA Outbreak,-2.663,0.0806,-3.438,-2.865,! Non-stationary
+ISA Outbreak 1m,-2.396,0.1429,-3.439,-2.865,! Non-stationary
+ISA Outbreak 3m,-1.81,0.3757,-3.439,-2.865,! Non-stationary
+Lice Outbreak,-8.896,0.0,-3.439,-2.865,I(0) ok
+Lice Outbreak 1m,-6.281,0.0,-3.439,-2.866,I(0) ok
+Lice Outbreak 3m,-7.436,0.0,-3.44,-2.866,I(0) ok
+Sea Temp,-9.819,0.0,-3.439,-2.866,I(0) ok
+Sea Temp 12m Avg,-3.018,0.0332,-3.44,-2.866,I(0) ok
+∆ EURNOK,-10.465,0.0,-3.437,-2.864,I(0) ok
+∆ EURNOK 1w,-10.458,0.0,-3.437,-2.864,I(0) ok
+∆ EURNOK 2w,-8.709,0.0,-3.437,-2.864,I(0) ok
+∆ EURNOK 1m,-6.882,0.0,-3.437,-2.864,I(0) ok
+∆ EURNOK 3m,-5.952,0.0,-3.437,-2.864,I(0) ok
+∆ EURNOK 6m,-4.96,0.0,-3.437,-2.864,I(0) ok
+∆ EURNOK 12m,-3.979,0.0015,-3.437,-2.864,I(0) ok
+CPI NO Monthly,-2.661,0.0811,-3.459,-2.874,! Non-stationary
+NIBOR 3m,-2.083,0.2514,-3.437,-2.864,! Non-stationary
+∆ Shrimp Price (Global) 1m Monthly,-10.328,0.0,-3.458,-2.874,I(0) ok
+∆ Shrimp Price (Global) 3m Monthly,-5.024,0.0,-3.459,-2.874,I(0) ok
+∆ Shrimp Price (Global) 6m Monthly,-4.067,0.0011,-3.459,-2.874,I(0) ok
+∆ Shrimp Price (Global) 12m Monthly,-3.164,0.0222,-3.459,-2.874,I(0) ok
+∆ Broiler Price (EU) 1w,-17.201,0.0,-3.439,-2.865,I(0) ok
+∆ Broiler Price (EU) 2w,-6.388,0.0,-3.44,-2.866,I(0) ok
+∆ Broiler Price (EU) 1m,-5.937,0.0,-3.44,-2.866,I(0) ok
+∆ Broiler Price (EU) 3m,-4.652,0.0001,-3.44,-2.866,I(0) ok
+∆ Broiler Price (EU) 6m,-4.209,0.0006,-3.44,-2.866,I(0) ok
+∆ Broiler Price (EU) 12m,-3.018,0.0333,-3.44,-2.866,I(0) ok
+∆ Pig Price (EU),-16.017,0.0,-3.441,-2.866,I(0) ok
+∆ Pig Price (EU) 1w,-5.041,0.0,-3.441,-2.866,I(0) ok
+∆ Pig Price (EU) 2w,-5.71,0.0,-3.441,-2.866,I(0) ok
+∆ Pig Price (EU) 1m,-4.497,0.0002,-3.441,-2.866,I(0) ok
+∆ Pig Price (EU) 3m,-5.079,0.0,-3.441,-2.866,I(0) ok
+∆ Pig Price (EU) 6m,-5.189,0.0,-3.441,-2.866,I(0) ok
+∆ Pig Price (EU) 12m,-2.443,0.1301,-3.442,-2.867,! Non-stationary
+Meat CPI (EU) Monthly,-2.623,0.0884,-3.459,-2.874,! Non-stationary
+∆ Fishmeal 1m Monthly,-10.345,0.0,-3.458,-2.874,I(0) ok
+∆ Fishmeal 3m Monthly,-3.992,0.0015,-3.459,-2.874,I(0) ok
+∆ Fishmeal 6m Monthly,-4.541,0.0002,-3.459,-2.874,I(0) ok
+∆ Fishmeal 12m Monthly,-3.593,0.0059,-3.459,-2.874,I(0) ok
+Brent FWD Slope,-3.34,0.0132,-3.437,-2.864,I(0) ok
+Brent FWD Curvature,-5.009,0.0,-3.437,-2.864,I(0) ok
+Soybean FWD Slope,-4.003,0.0014,-3.437,-2.864,I(0) ok
+Soybean FWD Curvature,-3.821,0.0027,-3.437,-2.864,I(0) ok

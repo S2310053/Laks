@@ -36,7 +36,6 @@ os.makedirs(RESULTS_DIR, exist_ok=True)
 
 ## ── Load data ────────────────────────────────────────────────────────────────
 df = pd.read_csv("Data/Factors.csv", parse_dates=["Date"])
-df = df.sort_values("Date").reset_index(drop=True)
 
 Y_COLS = [c for c in df.columns if c.startswith("Y ")]
 

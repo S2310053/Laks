@@ -670,7 +670,7 @@ class FeatureEngineer:
             if all(c in df.columns for c in [c1, c6, c12]):
                 out[f"{label} FWD Curvature"] = _ln(df[c1]) - 2 * _ln(df[c6]) + _ln(df[c12])
 
-        out = out.reset_index(drop=True)
+        out = out.sort_values("Date").reset_index(drop=True)
 
         ## Build freq_map from column naming convention.
         ## Columns ending in "Monthly" are broadcast monthly features — EDA must

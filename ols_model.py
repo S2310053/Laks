@@ -23,7 +23,6 @@ import matplotlib.pyplot as plt
 
 ## ── Load data ────────────────────────────────────────────────────────────────
 df = pd.read_csv("Data/Factors.csv", parse_dates=["Date"])
-df = df.sort_values("Date").reset_index(drop=True)
 
 HOLDOUT_START = "2022-01-01"
 
