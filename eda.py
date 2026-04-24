@@ -102,9 +102,7 @@ class EDA:
             return self._factors.loc[index, "Date"].values
         return index.values
 
-    @staticmethod
-    def _style(ax, xlabel="", ylabel="", grid_alpha=0.1):
-        """Apply thesis style: remove top/right spines, subtle grid, bold labels."""
+    def _style(self, ax, xlabel="", ylabel="", grid_alpha=0.1):
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         ax.grid(True, linestyle="--", alpha=grid_alpha)
@@ -113,20 +111,17 @@ class EDA:
         if ylabel:
             ax.set_ylabel(ylabel, fontweight="bold")
 
-    @staticmethod
-    def _ann(ax, text, loc="upper left"):
-        """Add a clean annotation box."""
-        x = 0.03 if "left" in loc else 0.97
+    def _ann(self, ax, text, loc="upper left"):
+        x  = 0.03 if "left" in loc else 0.97
         ha = "left" if "left" in loc else "right"
-        y = 0.97 if "upper" in loc else 0.03
+        y  = 0.97 if "upper" in loc else 0.03
         va = "top" if "upper" in loc else "bottom"
         ax.text(x, y, text, transform=ax.transAxes, fontsize=8.5,
                 ha=ha, va=va,
                 bbox=dict(boxstyle="round,pad=0.4", facecolor="white",
                           alpha=0.85, edgecolor="none"))
 
-    @staticmethod
-    def _footer(fig, left="", right=""):
+    def _footer(self, fig, left="", right=""):
         if left:
             fig.text(0.01, 0.01, left, fontsize=7.5, ha="left", va="bottom",
                      style="italic", color=_GREY)

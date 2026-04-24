@@ -21,6 +21,7 @@ import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 from metrics import Metrics
+metrics = Metrics()
 from plotter import Plotter
 
 ## ── Load data ────────────────────────────────────────────────────────────────
@@ -141,10 +142,10 @@ for target in Y_COLS:
         cv_alphas   = [f["best_alpha"] for f in fold_results]
         cv_nonzeros = [f["n_nonzero"]  for f in fold_results]
 
-        cv_rmse    = Metrics.rmse(cv_actuals, cv_preds)
-        cv_rw_rmse = Metrics.rw_rmse(cv_actuals)
-        cv_r2      = Metrics.r2(cv_actuals, cv_preds)
-        cv_hitrate = Metrics.hit_rate(cv_actuals, cv_preds)
+        cv_rmse    = metrics.rmse(cv_actuals, cv_preds)
+        cv_rw_rmse = metrics.rw_rmse(cv_actuals)
+        cv_r2      = metrics.r2(cv_actuals, cv_preds)
+        cv_hitrate = metrics.hit_rate(cv_actuals, cv_preds)
 
         print(f"  CV       RMSE={cv_rmse:.4f}  RW_RMSE={cv_rw_rmse:.4f}  "
               f"R²={cv_r2:.4f}  Hit={cv_hitrate:.1%}  "
@@ -179,11 +180,11 @@ for target in Y_COLS:
 
     hold_preds   = final_model.predict(X_hold_sc)
     hold_actuals = hold_data[target].values
-    hold_rmse    = Metrics.rmse(hold_actuals, hold_preds)
-    hold_rw_rmse = Metrics.rw_rmse(hold_actuals)
-    hold_r2      = Metrics.r2(hold_actuals, hold_preds)
-    hold_hitrate = Metrics.hit_rate(hold_actuals, hold_preds)
-    dm_stat, dm_p = Metrics.diebold_mariano(hold_actuals, hold_preds)
+    hold_rmse    = metrics.rmse(hold_actuals, hold_preds)
+    hold_rw_rmse = metrics.rw_rmse(hold_actuals)
+    hold_r2      = metrics.r2(hold_actuals, hold_preds)
+    hold_hitrate = metrics.hit_rate(hold_actuals, hold_preds)
+    dm_stat, dm_p = metrics.diebold_mariano(hold_actuals, hold_preds)
 
     n_nonzero_final = int(np.sum(final_model.coef_ != 0))
     best_alpha      = final_model.alpha_
@@ -264,15 +265,15 @@ summary_df.to_csv(f"{RESULTS_DIR}/lasso_summary.csv")
 ## ── PDF results table ────────────────────────────────────────────────────────
 disp = pd.DataFrame({
     "Horizon":    [r["Horizon"] for r in summary],
-    "CV RMSE":    [Metrics.fmt(r["CV RMSE"]) for r in summary],
-    "CV R²":      [Metrics.fmt(r["CV R2"], ".3f") for r in summary],
+    "CV RMSE":    [metrics.fmt(r["CV RMSE"]) for r in summary],
+    "CV R²":      [metrics.fmt(r["CV R2"], ".3f") for r in summary],
     "CV Hit":     [f'{r["CV Hit"]:.1%}' if r["CV Hit"] else "—" for r in summary],
-    "Hold RMSE":  [Metrics.fmt(r["Hold RMSE"]) for r in summary],
-    "Hold R²":    [Metrics.fmt(r["Hold R2"], ".3f") for r in summary],
+    "Hold RMSE":  [metrics.fmt(r["Hold RMSE"]) for r in summary],
+    "Hold R²":    [metrics.fmt(r["Hold R2"], ".3f") for r in summary],
     "Hold Hit":   [f'{r["Hold Hit"]:.1%}' if r["Hold Hit"] else "—" for r in summary],
-    "RW RMSE":    [Metrics.fmt(r["Hold RW RMSE"]) for r in summary],
+    "RW RMSE":    [metrics.fmt(r["Hold RW RMSE"]) for r in summary],
     "Skill %":    [f'{(1 - r["Hold RMSE"]/r["Hold RW RMSE"])*100:+.1f}%' for r in summary],
-    "DM":         [Metrics.fmt(r["Hold DM"], ".2f") for r in summary],
+    "DM":         [metrics.fmt(r["Hold DM"], ".2f") for r in summary],
     "p-value":    [f'{r["Hold DM p"]:.4f}' if r["Hold DM p"] >= 0.001
                    else "< 0.001" for r in summary],
     "α":          [f'{r["Best Alpha"]:.5f}' for r in summary],

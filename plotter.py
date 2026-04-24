@@ -17,8 +17,7 @@ class Plotter:
     HEADER_COLOR   = "#2c3e50"
     ROW_EVEN_COLOR = "#f0f4f8"
 
-    @staticmethod
-    def safe_filename(target):
+    def safe_filename(self, target):
         """Sanitise a target column name for use as a file name."""
         return target.replace("/", "-").replace(" ", "_").replace("∆", "d")
 
