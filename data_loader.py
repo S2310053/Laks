@@ -1212,16 +1212,11 @@ class DataLoader:
         ## Load datasets
         _data        = self.SalmonPriceFishPool()
         _salmonsb    = self.SalmonPriceSSB()
-        _escapes     = self.SalmonEscapes()
-
         _eurnok      = self.EURNOK()
         _usdnok      = self.USDNOK()
 
         _brent       = self.CommodityBrentPrice()
-        _wheat       = self.CommodityWheatPrice()
         _soybean     = self.CommoditySoybeanPrice()
-        _rapseed     = self.CommodityRapseedPrice()
-        _carbon      = self.CommodityCarbonPrice()
 
         _mowi        = self.EquityMOWIPrice()
         _salmar      = self.EquitySALMARPrice()
@@ -1232,7 +1227,6 @@ class DataLoader:
         _cpimeat     = self.ProteinCPIMeat()
         _biomass     = self.SalmonBiomass()
         _biomassCoh  = self.SalmonBiomassCohort()
-        _exports     = self.SalmonExport()
         _lice        = self.SalmonLice()
         _ila         = self.SalmonILA()
         _shrimp      = self.ProteinGlobalShrimpPrice()
@@ -1263,7 +1257,7 @@ class DataLoader:
         ## pre-calendar shrimp values (1992-1999) into the Jan 2000 rows.
         ## The warm-up rows are trimmed inside _lagByPublication.
         start = pd.Timestamp("1999-12-08")
-        end   = pd.Timestamp("2026-03-31")
+        end   = pd.Timestamp("2026-04-01")
 
         calendar = pd.DataFrame({
             "Date": pd.date_range(start=start, end=end, freq="W-WED")
@@ -1283,10 +1277,10 @@ class DataLoader:
 
         ## Weekly merges (aligned by Date)
         for w in [
-            _salmonsb, _escapes,
+            _salmonsb,
             _broiler, _pig,
             _eurnok, _usdnok,
-            _brent, _wheat, _soybean, _rapseed, _carbon,
+            _brent, _soybean,
             _mowi, _salmar,
             _lice, _ila, _shrimp, _fishmeal, _nibor, _chile, _forward
         ]:
@@ -1310,7 +1304,7 @@ class DataLoader:
             )
 
         ## Monthly merges (use calendar year, not ISO year)
-        for m in [_cpi, _cpimeat, _biomass, _biomassCoh, _exports]:
+        for m in [_cpi, _cpimeat, _biomass, _biomassCoh]:
 
             m = m.groupby(["Year","Month"], as_index=False).first()
             m = m.rename(columns={"Year": "CalendarYear"})

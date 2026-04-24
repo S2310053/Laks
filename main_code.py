@@ -26,7 +26,7 @@ from eda import EDA
 #  EXPORT_START  : first row written to Factors.csv and used by model scripts.
 #                  2006 ensures all rolling features are fully populated.
 DATA_START   = "2004-01-01"
-DATA_END     = "2025-12-31"
+DATA_END     = "2026-04-01"
 EXPORT_START = "2006-01-01"
 
 ## ── Stage 0: Load raw data ───────────────────────────────────────────────────

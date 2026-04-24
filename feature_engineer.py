@@ -39,14 +39,6 @@ class FeatureEngineer:
         "Commodity_Brent_CO5_NOK_bbl_Weekly":         0,
         "Commodity_Brent_CO6_NOK_bbl_Weekly":         0,
         "Commodity_Brent_CO12_NOK_bbl_Weekly":        0,
-        "Commodity_Wheat_CAA_NOK_mt_Weekly":          0,
-        "Commodity_Wheat_CA1_NOK_mt_Weekly":          0,
-        "Commodity_Wheat_CA2_NOK_mt_Weekly":          0,
-        "Commodity_Wheat_CA3_NOK_mt_Weekly":          0,
-        "Commodity_Wheat_CA4_NOK_mt_Weekly":          0,
-        "Commodity_Wheat_CA5_NOK_mt_Weekly":          0,
-        "Commodity_Wheat_CA6_NOK_mt_Weekly":          0,
-        "Commodity_Wheat_CA12_NOK_mt_Weekly":         0,
         "Commodity_Soybean_SMA_NOK_st_Weekly":        0,
         "Commodity_Soybean_SM1_NOK_st_Weekly":        0,
         "Commodity_Soybean_SM2_NOK_st_Weekly":        0,
@@ -55,21 +47,6 @@ class FeatureEngineer:
         "Commodity_Soybean_SM5_NOK_st_Weekly":        0,
         "Commodity_Soybean_SM6_NOK_st_Weekly":        0,
         "Commodity_Soybean_SM12_NOK_st_Weekly":       0,
-        "Commodity_Rapeseed_IJA_NOK_mt_Weekly":       0,
-        "Commodity_Rapeseed_IJ1_NOK_mt_Weekly":       0,
-        "Commodity_Rapeseed_IJ2_NOK_mt_Weekly":       0,
-        "Commodity_Rapeseed_IJ3_NOK_mt_Weekly":       0,
-        "Commodity_Rapeseed_IJ4_NOK_mt_Weekly":       0,
-        "Commodity_Rapeseed_IJ5_NOK_mt_Weekly":       0,
-        "Commodity_Rapeseed_IJ6_NOK_mt_Weekly":       0,
-        "Commodity_Rapeseed_IJ12_NOK_mt_Weekly":      0,
-        "Commodity_Carbon_MOA_NOK_mt_Weekly":         0,
-        "Commodity_Carbon_MO1_NOK_mt_Weekly":         0,
-        "Commodity_Carbon_MO2_NOK_mt_Weekly":         0,
-        "Commodity_Carbon_MO3_NOK_mt_Weekly":         0,
-        "Commodity_Carbon_MO4_NOK_mt_Weekly":         0,
-        "Commodity_Carbon_MO5_NOK_mt_Weekly":         0,
-        "Commodity_Carbon_MO6_NOK_mt_Weekly":         0,
         "Salmon_Forward_M1_Weekly":                   0,   # FishPool end-of-day closing price, NOK/kg
         "Salmon_Forward_M3_Weekly":                   0,
         "Salmon_Forward_M6_Weekly":                   0,
@@ -78,9 +55,6 @@ class FeatureEngineer:
     _oneWeek  = {
         "Salmon_NOK_kg_SSB_Weekly":                   1,   # SSB publishes following week
         "Salmon_Exported_Tons_SSB_Weekly":            1,
-        "Salmon_Escapes_Rep_Escaped_Weekly":          1,   # 24h statutory reporting window
-        "Salmon_Escapes_Recapture_Weekly":            1,
-        "Salmon_Escapes_Avg_Wt_Grams_Weekly":         1,
         "Salmon_Lice_LocalitiesReporting_Weekly":     1,   # BarentsWatch: published following week
         "Salmon_Lice_AvgFemale_Weekly":               1,
         "Salmon_SeaTemp_3m_Weekly":                   1,
@@ -129,9 +103,6 @@ class FeatureEngineer:
         "Salmon_Biomass_Fish_Stock_Age2Plus_Monthly": 20,
 
         # UN Comtrade multi-step pipeline (SSB → customs → Comtrade), releases ~10th of 2nd next month
-        "Salmon_Export_Net_Weight_Kg_Monthly":        40,
-        "Salmon_Export_Value_USD_Monthly":            40,
-        "Salmon_Export_Avg_Price_USD_Kg_Monthly":     40,
 
     }
 
@@ -447,6 +418,7 @@ class FeatureEngineer:
         #    shift(1) avoids look-ahead: vol at t uses r_{t-1}, ..., r_{t-k}
         out["RVol 4w"]  = _dln_spot.rolling(4).std().shift(1)
         out["RVol 13w"] = _dln_spot.rolling(13).std().shift(1)
+        out["RVol 52w"] = _dln_spot.rolling(52).std().shift(1)
 
         # ── 2. FP–SSB spread — reconstruct contemporaneous SSB by undoing the
         #       1-week publication lag (shift(-1)), compute ln(FP_t / SSB_t),
