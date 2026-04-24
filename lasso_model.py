@@ -20,6 +20,28 @@ from sklearn.model_selection import TimeSeriesSplit
 import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+
+# ── thesis plot style ─────────────────────────────────────────────────────────
+plt.rcParams["font.family"]      = "Times New Roman"
+plt.rcParams["mathtext.fontset"] = "custom"
+plt.rcParams["mathtext.rm"]      = "Times New Roman"
+plt.rcParams["mathtext.it"]      = "Times New Roman:italic"
+plt.rcParams["mathtext.bf"]      = "Times New Roman:bold"
+
+_BLUE = "#1A6B8A"
+_RED  = "#C4654A"
+_DARK = "#0D3B5E"
+_GREY = "dimgrey"
+
+def _style_ax(ax, ylabel=""):
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.grid(True, linestyle="--", alpha=0.1)
+    if ylabel:
+        ax.set_ylabel(ylabel, fontweight="bold")
+    ax.xaxis.set_major_locator(mdates.YearLocator(2))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
 from metrics import Metrics
 metrics = Metrics()
 from plotter import Plotter
@@ -221,35 +243,45 @@ for target in Y_COLS:
     nonzero_coef = coef_series[coef_series != 0].sort_values()
 
     n_axes = 3 if len(cv_preds) > 0 else 2
-    fig, axes = plt.subplots(n_axes, 1, figsize=(14, 5 * n_axes))
-    fig.suptitle(f"{target}{' [NOWCAST]' if is_nowcast else ''}", fontsize=13)
+    fig, axes = plt.subplots(n_axes, 1, figsize=(14, 5 * n_axes), facecolor="white")
+    fig.suptitle(f"{target}{' [NOWCAST]' if is_nowcast else ''}",
+                 fontsize=13, fontweight="bold")
 
     ax_idx = 0
     if len(cv_preds) > 0:
-        axes[ax_idx].plot(cv_dates, cv_actuals, label="Actual",    alpha=0.8)
-        axes[ax_idx].plot(cv_dates, cv_preds,   label="Predicted", alpha=0.8)
-        axes[ax_idx].set_title(
-            f"Purged CV  (RMSE={cv_rmse:.4f}, RW={cv_rw_rmse:.4f}, R²={cv_r2:.4f})")
-        axes[ax_idx].legend(); axes[ax_idx].grid(True, alpha=0.3)
+        axes[ax_idx].plot(cv_dates, cv_actuals, label="Actual",    color=_DARK, lw=1.5, alpha=0.85)
+        axes[ax_idx].plot(cv_dates, cv_preds,   label="Predicted", color=_BLUE, lw=1.2, alpha=0.85)
+        axes[ax_idx].axhline(0, color=_GREY, lw=0.8, ls="--")
+        axes[ax_idx].set_title(f"Purged CV  —  RMSE={cv_rmse:.4f}  |  RW={cv_rw_rmse:.4f}  |  R²={cv_r2:.4f}",
+                               fontsize=10)
+        axes[ax_idx].legend(frameon=False, fontsize=9)
+        _style_ax(axes[ax_idx], ylabel="∆ Price (NOK/kg)")
         ax_idx += 1
 
-    axes[ax_idx].plot(hold_data["Date"].values, hold_actuals, label="Actual",    alpha=0.8)
-    axes[ax_idx].plot(hold_data["Date"].values, hold_preds,   label="Predicted", alpha=0.8)
-    axes[ax_idx].set_title(
-        f"Holdout 2022–2025  (RMSE={hold_rmse:.4f}, RW={hold_rw_rmse:.4f}, "
-        f"R²={hold_r2:.4f}, DM p={dm_p:.3f}, α={best_alpha:.5f})")
-    axes[ax_idx].legend(); axes[ax_idx].grid(True, alpha=0.3)
+    axes[ax_idx].plot(hold_data["Date"].values, hold_actuals, label="Actual",    color=_DARK, lw=1.5, alpha=0.85)
+    axes[ax_idx].plot(hold_data["Date"].values, hold_preds,   label="Predicted", color=_BLUE, lw=1.2, alpha=0.85)
+    axes[ax_idx].axhline(0, color=_GREY, lw=0.8, ls="--", label="Random Walk")
+    axes[ax_idx].set_title(f"Holdout 2022–2025  —  RMSE={hold_rmse:.4f}  |  RW={hold_rw_rmse:.4f}  |  "
+                           f"R²={hold_r2:.4f}  |  DM p={dm_p:.3f}  |  α={best_alpha:.5f}", fontsize=10)
+    axes[ax_idx].legend(frameon=False, fontsize=9)
+    _style_ax(axes[ax_idx], ylabel="∆ Price (NOK/kg)")
     ax_idx += 1
 
     if len(nonzero_coef) > 0:
-        nonzero_coef.tail(30).plot(kind="barh", ax=axes[ax_idx])  # top 30 by magnitude
+        coef30 = nonzero_coef.tail(30)
+        bar_colors = [_BLUE if v > 0 else _RED for v in coef30.values]
+        axes[ax_idx].barh(coef30.index, coef30.values, color=bar_colors, alpha=0.85)
+        axes[ax_idx].axvline(0, color=_GREY, lw=0.8)
         axes[ax_idx].set_title(
-            f"Non-zero Lasso coefficients  ({n_nonzero_final} selected, α={best_alpha:.5f})")
-        axes[ax_idx].axvline(0, color="black", lw=0.8)
-        axes[ax_idx].grid(True, alpha=0.3)
+            f"Non-zero Lasso Coefficients  ({n_nonzero_final} selected,  α={best_alpha:.5f})",
+            fontsize=10)
+        axes[ax_idx].set_xlabel("Coefficient", fontweight="bold")
     else:
         axes[ax_idx].text(0.5, 0.5, "All coefficients zeroed out",
                           ha="center", va="center", transform=axes[ax_idx].transAxes)
+    axes[ax_idx].spines["top"].set_visible(False)
+    axes[ax_idx].spines["right"].set_visible(False)
+    axes[ax_idx].grid(True, linestyle="--", alpha=0.1)
 
     plt.tight_layout()
     safe_name = target.replace("/", "-").replace(" ", "_").replace("∆", "d")

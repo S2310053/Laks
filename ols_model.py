@@ -21,6 +21,27 @@ from plotter import Plotter
 import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+
+# ── thesis plot style ─────────────────────────────────────────────────────────
+plt.rcParams["font.family"]      = "Times New Roman"
+plt.rcParams["mathtext.fontset"] = "custom"
+plt.rcParams["mathtext.rm"]      = "Times New Roman"
+plt.rcParams["mathtext.it"]      = "Times New Roman:italic"
+plt.rcParams["mathtext.bf"]      = "Times New Roman:bold"
+
+_BLUE = "#1A6B8A"
+_DARK = "#0D3B5E"
+_GREY = "dimgrey"
+
+def _style_ax(ax, ylabel=""):
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.grid(True, linestyle="--", alpha=0.1)
+    if ylabel:
+        ax.set_ylabel(ylabel, fontweight="bold")
+    ax.xaxis.set_major_locator(mdates.YearLocator(2))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
 
 ## ── Load data ────────────────────────────────────────────────────────────────
 df = pd.read_csv("Data/Factors.csv", parse_dates=["Date"])
@@ -168,27 +189,32 @@ for target, cfg in HORIZONS.items():
 
     ## ── Plot ─────────────────────────────────────────────────────────────────
     n_axes = 2 if len(cv_preds) > 0 else 1
-    fig, axes = plt.subplots(n_axes, 1, figsize=(14, 5 * n_axes))
+    fig, axes = plt.subplots(n_axes, 1, figsize=(14, 5 * n_axes), facecolor="white")
     if n_axes == 1:
         axes = [axes]
-    fig.suptitle(f"OLS  —  {target}  ~  {fwd_feat}   (β={beta_hat:.3f}, p(β=1)={p_beta1:.3f})",
-                 fontsize=13)
+    fig.suptitle(f"OLS  —  {target}  ~  {fwd_feat}   (β={beta_hat:.3f},  p(β=1)={p_beta1:.3f})",
+                 fontsize=13, fontweight="bold")
 
     ax_idx = 0
     if len(cv_preds) > 0:
-        axes[ax_idx].plot(cv_dates, cv_actuals, label="Actual",   color="black", alpha=0.8, lw=1.5)
-        axes[ax_idx].plot(cv_dates, cv_preds,   label="OLS",      alpha=0.75, lw=1.2)
-        axes[ax_idx].axhline(0, color="grey", lw=0.8, ls="--", label="Random Walk (0)")
-        axes[ax_idx].set_title(f"Purged CV  (RMSE={cv_rmse:.4f}, R²={cv_r2:.4f})")
-        axes[ax_idx].legend(); axes[ax_idx].grid(True, alpha=0.3)
+        axes[ax_idx].plot(cv_dates, cv_actuals, label="Actual", color=_DARK, lw=1.5, alpha=0.85)
+        axes[ax_idx].plot(cv_dates, cv_preds,   label="OLS",    color=_BLUE, lw=1.2, alpha=0.85)
+        axes[ax_idx].axhline(0, color=_GREY, lw=0.8, ls="--", label="Random Walk")
+        axes[ax_idx].set_title(f"Purged CV  —  RMSE={cv_rmse:.4f}  |  RW={cv_rw_rmse:.4f}  |  R²={cv_r2:.4f}",
+                               fontsize=10)
+        axes[ax_idx].legend(frameon=False, fontsize=9)
+        _style_ax(axes[ax_idx], ylabel="∆ Price (NOK/kg)")
         ax_idx += 1
 
     axes[ax_idx].plot(hold_data["Date"].values, hold_actuals, label="Actual",
-                      color="black", alpha=0.8, lw=1.5)
-    axes[ax_idx].plot(hold_data["Date"].values, hold_preds,   label="OLS", alpha=0.75, lw=1.2)
-    axes[ax_idx].axhline(0, color="grey", lw=0.8, ls="--", label="Random Walk (0)")
-    axes[ax_idx].set_title(f"Holdout 2022–2025  (RMSE={hold_rmse:.4f}, R²={hold_r2:.4f}, DM p={dm_p:.3f})")
-    axes[ax_idx].legend(); axes[ax_idx].grid(True, alpha=0.3)
+                      color=_DARK, lw=1.5, alpha=0.85)
+    axes[ax_idx].plot(hold_data["Date"].values, hold_preds,   label="OLS",
+                      color=_BLUE, lw=1.2, alpha=0.85)
+    axes[ax_idx].axhline(0, color=_GREY, lw=0.8, ls="--", label="Random Walk")
+    axes[ax_idx].set_title(f"Holdout 2022–2025  —  RMSE={hold_rmse:.4f}  |  RW={hold_rw_rmse:.4f}  |  "
+                           f"R²={hold_r2:.4f}  |  DM p={dm_p:.3f}", fontsize=10)
+    axes[ax_idx].legend(frameon=False, fontsize=9)
+    _style_ax(axes[ax_idx], ylabel="∆ Price (NOK/kg)")
 
     plt.tight_layout()
     safe_name = target.replace("/", "-").replace(" ", "_").replace("∆", "d")
