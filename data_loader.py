@@ -28,7 +28,7 @@ class DataLoader:
     SALMON_BIOMASS         = _salmon + _salmonMarket + "Biomass.xlsx"
     SALMON_ESCAPES         = _salmon + _salmonMarket + "Escapes.xlsx"
     SALMON_LICE            = _salmon + _salmonMarket + "sealice_norway_weekly.xlsx"
-    SALMON_ILA             = _salmon + "/ila_pd.csv"
+    SALMON_ILA             = _salmon + _salmonMarket + "ila_pd.csv"
     
     CPI_NORWAY             = _salmon + _salmonMarket + "CPI_YOY.xlsx"
     PROTEIN_SHRIMP_PRICE   = _protein + "GlobalShrimpPrice.xlsx"
