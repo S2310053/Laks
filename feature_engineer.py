@@ -1,90 +1,73 @@
-##
 #  This module engineers the features constructed on selected variables
-#
 
 ##
-#  Import necessary libraries
-#
+# This module defines the FeatureEngineer class, which is responsible for making the variables and final dataset to be used in modelling
+# Data sources had a huge variation in setup, publication days, frequencies etc., making it crucial to carefully align all variables to avoid look-ahead bias
+# We first account for publication lags, and validated that these are correct
+# Then we construct the variables to make the final dataset for modelling
+# This is mostly based on what data was available to us, but also guided by some general assumptions we had about the price formation process and what information would be relevant for forecasting salmon prices
+# Among other things, this included lagging several variables. As a biological commodity, our assumption is that Salmon prices are affected by short- and long-term supply and demand shocks
+# As well as the fish following natural growth and life-cycle patterns, which makes variables relevant at different lags and forecast horizons
+##
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
 from pandas.tseries.offsets import MonthEnd
 
-##
-#  This class composes the feature engineering,
-#  constructs variables used by the models
-#
 
+# Shifts variables based on publication lag of the different datasets
+# By default, data dated last day of the week (i.e. friday), is already pushed to following Wednesday
+# The naming is a bit inconsistent, as it stems from a early draft. We have decided to keep it as is, to avoid changing something and messing up the code
+# Naming is simplified later in the code
 class FeatureEngineer:
 
-    ## Defines weekly variables with fixed row-shift publication lags.
-    #  Lag = number of Wednesday steps to shift forward.
-    #  Only variables with lag > 0 are shifted; lag = 0 entries document
-    #  that real-time availability was confirmed (no shift needed).
-    #
     _zeroWeek = {
+        "Protein_Pig_EUR_100_kg_Weekly":             -1, # Bloomberg gives data as weekly, meaning Friday close, but price is actually released on Wednesday, by the original source
         "EURNOK_Weekly":                              0,
         "USDNOK_Weekly":                              0,
-        "NIBOR_3m_Weekly":                            0,   # Bloomberg daily, Wednesday close, no lag
-        "Protein_Pig_EUR_100_kg_Weekly":             -1,   # Bloomberg dates Friday, actual release Wed — shift back 1 week to correct misdating
-        "Protein_Broiler_EUR_100_kg_Weekly":          0,   # W-WED resample already places Friday publication in following bin — no extra lag needed
+        "NIBOR_3m_Weekly":                            0,
+        "Protein_Broiler_EUR_100_kg_Weekly":          0,   
         "Equity_MOWI_NOK_Weekly":                     0,
         "Equity_SALMAR_NOK_Weekly":                   0,
-        "Commodity_Brent_COA_NOK_bbl_Weekly":         0,   
         "Commodity_Brent_CO1_NOK_bbl_Weekly":         0,
-        "Commodity_Brent_CO2_NOK_bbl_Weekly":         0,
-        "Commodity_Brent_CO3_NOK_bbl_Weekly":         0,
-        "Commodity_Brent_CO4_NOK_bbl_Weekly":         0,
-        "Commodity_Brent_CO5_NOK_bbl_Weekly":         0,
         "Commodity_Brent_CO6_NOK_bbl_Weekly":         0,
         "Commodity_Brent_CO12_NOK_bbl_Weekly":        0,
-        "Commodity_Soybean_SMA_NOK_st_Weekly":        0,
         "Commodity_Soybean_SM1_NOK_st_Weekly":        0,
-        "Commodity_Soybean_SM2_NOK_st_Weekly":        0,
-        "Commodity_Soybean_SM3_NOK_st_Weekly":        0,
-        "Commodity_Soybean_SM4_NOK_st_Weekly":        0,
-        "Commodity_Soybean_SM5_NOK_st_Weekly":        0,
         "Commodity_Soybean_SM6_NOK_st_Weekly":        0,
         "Commodity_Soybean_SM12_NOK_st_Weekly":       0,
-        "Salmon_Forward_M1_Weekly":                   0,   # FishPool end-of-day closing price, NOK/kg
+        "Salmon_Forward_M1_Weekly":                   0,
         "Salmon_Forward_M3_Weekly":                   0,
         "Salmon_Forward_M6_Weekly":                   0,
         "Salmon_Forward_M12_Weekly":                  0}
 
     _oneWeek  = {
-        "Salmon_NOK_kg_SSB_Weekly":                   1,   # SSB publishes following week
-        "Salmon_Exported_Tons_SSB_Weekly":            1,
-        "Salmon_Lice_LocalitiesReporting_Weekly":     1,   # BarentsWatch: published following week
-        "Salmon_Lice_AvgFemale_Weekly":               1,
+        "Salmon_NOK_kg_SSB_Weekly":                   1,   #SSB: Published following Wednesday
+        "Salmon_Exported_Tons_SSB_Weekly":            1,  
+        "Salmon_Lice_AvgFemale_Weekly":               1,    #BarentsWatch: Published no later than following Wednsday, most times earlier
         "Salmon_SeaTemp_3m_Weekly":                   1,
-        "Salmon_Lice_PctAboveLimit_Weekly":           1,
-        "Salmon_Lice_PctTreated_Weekly":              1,
-        "Salmon_Lice_ICA_Count_Weekly":               1,   # ISA (ICA) locality count from BarentsWatch API
-        "Salmon_ILA_ActiveLocalities_Weekly":         1,   # Active ILA outbreaks from Mattilsynet ila_pd.csv
-        "Protein_Shrimp_USD_mt_Weekly":               4,    # IMF/FRED monthly, ~4-week publication lag
-        "Commodity_Fishmeal_USD_mt_Weekly":           4,    # Bloomberg monthly end-of-month, ~4-week lag
-        "Salmon_Chile_Export_Volume_Weekly":          1}    # Chilean customs, ~1-week publication lag
+        "Salmon_Lice_ICA_Count_Weekly":               1,   
+        "Salmon_ILA_ActiveLocalities_Weekly":         1,   #Mattilsynet: Published as soon as information is available, but reporting usually takes 2-3 days
+        "Salmon_Chile_Export_Volume_Weekly":          1}   #Chilean customs: Published no later than following Wednesday
+    
+    _fourWeek = {
+        "Protein_Shrimp_USD_mt_Weekly":               4,    #IMF/FRED: End-of-Month data is published within 4 weeks
+        "Commodity_Fishmeal_USD_mt_Weekly":           4,}   #Bloomberg: End-of-Month data is published within 4 weeks
 
-    PUBLISH_LAG_WEEKS = _zeroWeek | _oneWeek
+    PUBLISH_LAG_WEEKS = _zeroWeek | _oneWeek | _fourWeek
 
-    ## Defines monthly variables with calendar-exact publication lags.
-    #
-    #  Each value is the number of calendar days after the END OF THE
-    #  REFERENCE MONTH when the data becomes publicly available.
-    #
-    #  Implementation: _lagByPublication uses merge_asof to assign each row
-    #  the most recently published monthly value, defined as the latest month M
-    #  whose publish Wednesday (= EOMONTH(M) + N, snapped to next Wednesday)
-    #  falls on or before the row's date.
-    #
+
+    # Function is used to lag variables where the data is released on a given day of the month (Based on Excel's EOMONTH function)
+    # Variables are then snapped to the first Wednesday following that day
+    # Note: There may be occations where the release date is a weekend, in which case data is released following Monday.
+    # As we snap to the first Wednesday anyways, this doesn't cause any issues
     PUBLISH_LAG_EOMONTH = {
-
         # SSB releases ~10th of following month
-        "CPI_Norway_Monthly":                         10,
-        "Protein_Meat_Inflation_YoY_Monthly":         10,  # Eurostat HICP; same schedule
+        "CPI_Norway_Monthly":                         10, #SSB: CPI is released on the 10th of the following month
+        "Protein_Meat_Inflation_YoY_Monthly":         10, #Eurostat HICP: Follows same pattern as SSB
 
-        # Fiskeridirektoratet biomass panel, releases ~20th of following month
+        # Fiskeridirektoratet: Biomass panel released on the 20th of following month
         "Salmon_Biomass_Fish_Stock_Monthly":          20,
         "Salmon_Biomass_Kg_Monthly":                  20,
         "Salmon_Biomass_Smolt_Releases_Monthly":      20,
@@ -95,35 +78,16 @@ class FeatureEngineer:
         "Salmon_Biomass_Discard_N_Monthly":           20,
         "Salmon_Biomass_Escape_N_Monthly":            20,
         "Salmon_Biomass_Other_Loss_N_Monthly":        20,
-        "Salmon_Biomass_Biomass_Kg_Age0_Monthly":     20,
-        "Salmon_Biomass_Biomass_Kg_Age1_Monthly":     20,
-        "Salmon_Biomass_Biomass_Kg_Age2Plus_Monthly": 20,
-        "Salmon_Biomass_Fish_Stock_Age0_Monthly":     20,
-        "Salmon_Biomass_Fish_Stock_Age1_Monthly":     20,
-        "Salmon_Biomass_Fish_Stock_Age2Plus_Monthly": 20,
-
-        # UN Comtrade multi-step pipeline (SSB → customs → Comtrade), releases ~10th of 2nd next month
 
     }
 
     def __init__(self):
         pass
 
-    ##
-    #   Apply publication lags to time series features.
-    #
-    #   Weekly variables  → shifted by a fixed number of rows (weeks).
-    #   Monthly variables → each row receives the most recently published
-    #                       monthly value, where "published" means the first
-    #                       Wednesday on or after EOMONTH(reference_month) + N days.
-    #                       Implemented via merge_asof for exact calendar alignment.
-    #
-    #   @data   DataFrame with a 'Date' column or DatetimeIndex (Wednesday spine)
-    #   @return DataFrame with look-ahead bias removed
-    #
+    # Shifts all variables by their given publication lag, giving us a DataFrame without look-ahead bias
     def _lagByPublication(self, data: pd.DataFrame) -> pd.DataFrame:
 
-        # ── Resolve dates ─────────────────────────────────────────────────────
+        # Find dates
         if "Date" in data.columns:
             dates = pd.to_datetime(data["Date"]).reset_index(drop=True)
         elif isinstance(data.index, pd.DatetimeIndex):
@@ -131,20 +95,16 @@ class FeatureEngineer:
         else:
             raise ValueError("DataFrame must have a 'Date' column or a DatetimeIndex.")
 
-        # ── Weekly lags (fixed row shift) ─────────────────────────────────────
+        # Weekly lags (shift by fixed number of rows, one per weekly lag)
         for col, lag in self.PUBLISH_LAG_WEEKS.items():
             if col in data.columns and lag != 0:
                 data[col] = data[col].shift(lag)
 
-        # ── Monthly lags (EOMONTH-exact, via merge_asof) ──────────────────────
+        # Monthly lags (Move to last days of the month, adds N days according to publication schedule, and snaps to following Wednesday)
         for col, days_after in self.PUBLISH_LAG_EOMONTH.items():
             if col not in data.columns:
                 continue
 
-            # Build one entry per reference month:
-            #   month_end      = last calendar day of the reference month
-            #   value          = the monthly value broadcast to all rows in that month
-            #   publish_wed    = first Wednesday on or after EOMONTH(month) + N days
             schedule = (
                 pd.DataFrame({
                     "month_end" : dates + MonthEnd(0),
@@ -160,8 +120,6 @@ class FeatureEngineer:
             days_to_wed      = (2 - raw_pub.dt.dayofweek) % 7          # 0 if already Wednesday
             schedule["publish_wed"] = raw_pub + pd.to_timedelta(days_to_wed, unit="D")
 
-            # For each row date: look up the most recently published value
-            # merge_asof(direction="backward") gives the last publish_wed ≤ row_date
             row_frame = (
                 pd.DataFrame({"row_date": dates, "orig_order": range(len(dates))})
                 .sort_values("row_date")
@@ -174,36 +132,23 @@ class FeatureEngineer:
                 direction="backward",
             )
 
-            # Restore original row order and assign back
+            # Restore original row order and assign back dates
             merged  = merged.sort_values("orig_order")
             data[col] = merged["value"].values
 
-        ## Trim the 4-week warm-up buffer added by Data() and reset the time index
+        # Trim the 4-week warm-up buffer (to avoid missing rows) added by Data() and reset the time index
         data = data[data["Date"] >= pd.Timestamp("2000-01-05")].reset_index(drop=True)
         data["t"] = range(len(data))
 
         return data
 
-    ##
-    #   Validate that publication lags were applied correctly on an
-    #   already-lagged DataFrame (output of _lagByPublication).
-    #
-    #   Weekly variables  — checks that the number of leading NaN rows
-    #                       equals the expected lag (shift introduces NaN
-    #                       at the top of the series).
-    #   Monthly variables — finds value transition points in the lagged
-    #                       series, back-calculates the reference month from
-    #                       each transition date, and verifies the transition
-    #                       falls on the correct publish Wednesday
-    #                       (= first Wednesday on or after EOMONTH(M) + N days).
-    #
-    #   Prints a formatted report. No data is modified.
-    #
-    #   @data   DataFrame output of _lagByPublication()
-    #
+    # Validates that publication lags where applied correctly 
+    # For weekly variables, checks that the number of leading NaN rows are correct
+    # For monthly variables, finds value transition points in the lagged series, back-calculates the reference month from each transition date,
+    # and verifies the transition falls on the correct publish Wednesday
     def validatePublicationLags(self, data: pd.DataFrame) -> None:
 
-        # Resolve dates
+        # Find dates
         if "Date" in data.columns:
             dates = pd.to_datetime(data["Date"]).reset_index(drop=True)
         elif isinstance(data.index, pd.DatetimeIndex):
@@ -217,9 +162,7 @@ class FeatureEngineer:
         print(f"  PUBLICATION LAG VALIDATION REPORT")
         print(f"{SEP}")
 
-        # ── 1. Weekly lags ────────────────────────────────────────────────────
-        # After shift(n), the first n rows are NaN. Check that leading NaN
-        # count is >= lag (it may be larger if the raw source itself starts late).
+        # Weekly lags
         print(f"\n── WEEKLY LAGS (fixed row shift) {'─'*39}")
         print(f"\n  {'Column':<47} {'Lag':>3}  {'Leading NaNs':>13}  {'First value on':<16} Status")
         print(f"  {'─'*47} {'───':>3}  {'─────────────':>13}  {'─'*16} ──────")
@@ -243,12 +186,7 @@ class FeatureEngineer:
             print(f"  {col_disp:<47} {lag:>3}  {leading_nans:>6} (exp≥{lag:>2})  "
                   f"{str(first_val_date):<16} {status}")
 
-        # ── 2. Monthly lags ───────────────────────────────────────────────────
-        # Finds value transitions in the lagged series, then back-calculates
-        # the reference month end from each transition date:
-        #   upper         = trans_date − days_after
-        #   ref_month_end = largest month-end ≤ upper
-        # Then recomputes the expected publish Wednesday and compares.
+        # Monthly lags
         print(f"\n── MONTHLY LAGS (EOMONTH + N days, snapped to Wednesday) {'─'*16}")
         print(f"   Back-calculates reference month from each transition date.\n")
         print(f"  {'Column':<47} {'Offset':>7}  {'Ref Month':>9}  "
@@ -263,7 +201,7 @@ class FeatureEngineer:
             col_disp = (col[:45] + "..") if len(col) > 47 else col
             offset_str = f"+{days_after}d"
 
-            # Collect value-to-different-value transitions
+            # Collect value transitions
             transitions = []
             prev_val = np.nan
             for i in range(len(series)):
@@ -283,8 +221,7 @@ class FeatureEngineer:
             # Sample one transition from the middle of the series
             trans_date, _ = transitions[len(transitions) // 2]
 
-            # Back-calculate reference month end:
-            #   EOMONTH(M) is the largest month-end ≤ (trans_date − days_after)
+            # Back-calculate reference month end
             upper             = trans_date - pd.Timedelta(days=days_after)
             month_end_upper   = upper + MonthEnd(0)   # end of upper's own month (≥ upper)
             if month_end_upper <= upper:
@@ -292,7 +229,7 @@ class FeatureEngineer:
             else:
                 ref_month_end = pd.Timestamp(upper.year, upper.month, 1) - pd.Timedelta(days=1)
 
-            # Re-derive expected publish Wednesday
+            # Derive expected publish Wednesday
             raw_pub     = ref_month_end + pd.Timedelta(days=days_after)
             days_to_wed = (2 - raw_pub.dayofweek) % 7
             exp_pub_wed = raw_pub + pd.Timedelta(days=days_to_wed)
@@ -311,55 +248,11 @@ class FeatureEngineer:
                   f"{str(exp_pub_wed.date()):>11}  {str(trans_date.date()):>12}  {status}")
 
         print(f"\n{SEP}\n")
+ 
 
-    ##
-    #   Build the feature matrix used for forecasting models.
-    #
-    #   Variables in the order specified:
-    #     Target : Δln(Salmon_NOK_kg_FP_Weekly)
-    #     1.  Δln spot lag-1 (AR term; additional lags added after ACF/PACF)
-    #     2.  ln(FP / SSB) spread              [deferred — Granger test first]
-    #     3.  ln(F_M1  / Spot)
-    #     4.  ln(F_M3  / Spot)
-    #     5.  ln(F_M6  / Spot)
-    #     6.  ln(F_M12 / Spot)
-    #     7.  Forward slope     ln(F_M12 / F_M1)
-    #     8.  Forward curvature ln(F_M1) − 2·ln(F_M6) + ln(F_M12)
-    #     9.  Export volume Δln
-    #     10. Biomass Age0  ln-level
-    #     11. Biomass Age1  ln-level
-    #     12. Biomass Age2+ ln-level
-    #     13. Biomass share Age2+ (raw proportion)
-    #     14. Average weight kg/fish (raw)
-    #     15. FCR proxy Feed/Biomass (raw)
-    #     16. Harvest Intensity Harvest/Biomass (raw)
-    #     17. Loss Rate (raw)
-    #     18. Mortality Rate (raw)              [deferred — collinearity check]
-    #     19. Smolt ln-level, lagged smolt_lag weeks
-    #     20. ILA active localities ln(1+x)
-    #     21. Sea lice avg female ln(1+x)
-    #     22. Sea lice treatment % (raw)
-    #     23. Sea temperature (raw)
-    #     24. Δln EURNOK
-    #     25. CPI Norway level (already YoY %)
-    #     26. Δln Shrimp
-    #     27. Δln Broiler
-    #     28. Δln Pig
-    #     29. Protein Meat Inflation YoY level  [deferred — may drop]
-    #     30. Δln Soybean
-    #     31. Δln Wheat
-    #     32. Δln Rapeseed
-    #     33. Δln Brent
-    #     34–37. Commodity curve slope  × 4  ln(C6/C1)
-    #     38–41. Commodity curve curv   × 4  ln(C1)−2·ln(C3)+ln(C6)
-    #
-    #   @data       DataFrame output of _lagByPublication()
-    #   @smolt_lag  weeks to lag smolt releases (default 65)
-    #   @return     DataFrame with Date, y, and all feature columns
-    #
+    # Building the feature matrix used for the forecasting models
     def buildFeatureMatrix(self,
-                           data: pd.DataFrame,
-                           smolt_lag: int = 65) -> pd.DataFrame:
+                           data: pd.DataFrame) -> pd.DataFrame:
 
         data = self._lagByPublication(data)
         self.validatePublicationLags(data)
@@ -367,30 +260,25 @@ class FeatureEngineer:
         df   = data.copy()
         spot = df["Salmon_NOK_kg_FP_Weekly"]
 
+        # Log level — returns NaN where input is zero, negative, or missing
+        # As CATBoost natively handles NaNs, we would rather have NaN than a zero value (which is not actually zero, but just missing/invalid data)
         def _ln(s):
-            """Log level — returns NaN where input is zero, negative, or missing."""
             s      = pd.to_numeric(s, errors="coerce")
             result = np.full(len(s), np.nan)
             mask   = s.values > 0
             result[mask] = np.log(s.values[mask])
             return pd.Series(result, index=s.index)
 
+        # Week-over-week log return
         def _dln(s):
-            """Week-over-week log return — returns 0 where input is zero or negative."""
             return _ln(s).diff()
 
         out = pd.DataFrame({"Date": df["Date"]})
 
-        # ── Target: Y 0w (nowcast) + multi-horizon leads Y 1w…12m ───────────────
-        #    Spot price has a 1-week publication lag: at row t, the most recently
-        #    published price is for week t-1. So dln[t+1] is the first unknown return.
-        #
-        #    Y 0w  = dln[t+1]                       — nowcast (1 period)
-        #    Y 1w  = dln[t+2]                       — 1 week after nowcast
-        #    Y h   = dln[t+1] + … + dln[t+h]       — cumulative log return (Corsi HAR)
-        #          = ln(spot[t+h] / spot[t])
-        #
-        #    These use future data — valid as targets only, never as predictors.
+        # Target construction: Cumulative log returns over each horzon
+        # Y 0w is included as a "nowcast" (Inclusion is based on today's price is not published until the following week)
+        # For the other we use cumulative log returns, which have the added benefit of being easily transferred back to the raw price levels
+        # Given we are in week t, our most recent price is from t-1, and therefore price change from t-1 to t (dln[t]) is unknown at time of prediction and can be included as part of the target.
         _dln_spot = _dln(spot)
         out["Y 0w ∆ Salmon (NOK/KG)"]  = _dln_spot
         out["Y 1w ∆ Salmon (NOK/KG)"]  = _dln_spot.rolling(2).sum().shift(-1)
@@ -400,9 +288,9 @@ class FeatureEngineer:
         out["Y 6m ∆ Salmon (NOK/KG)"]  = _dln_spot.rolling(27).sum().shift(-26)
         out["Y 12m ∆ Salmon (NOK/KG)"] = _dln_spot.rolling(53).sum().shift(-52)
 
-        # ── 1. HAR-style Δln spot lags: avg over 1w, 2w, 1m, 3m, 6m, 12m ────
-        #    Each is the rolling average of Δln(spot) ending last week (shift(1)
-        #    ensures no look-ahead). Averages keep all horizons on the same scale.
+        # HAR-style Δln spot lags: avg over 1w, 2w, 1m, 3m, 6m, 12m
+        # Uses rolling means, consistent with Corsi (2009) realised volatility paper
+        # Shifted by 1 week to avoid look-ahead bias
         out["∆ Salmon (NOK/KG) 1w"]  = _dln_spot.rolling(1).mean().shift(1)
         out["∆ Salmon (NOK/KG) 2w"]  = _dln_spot.rolling(2).mean().shift(1)
         out["∆ Salmon (NOK/KG) 1m"]  = _dln_spot.rolling(4).mean().shift(1)
@@ -410,28 +298,19 @@ class FeatureEngineer:
         out["∆ Salmon (NOK/KG) 6m"]  = _dln_spot.rolling(26).mean().shift(1)
         out["∆ Salmon (NOK/KG) 12m"] = _dln_spot.rolling(52).mean().shift(1)
 
-        # ── 1b. Realized volatility: rolling std of Δln(spot) ────────────
-        #    Captures current vol regime — lets models scale predictions up
-        #    during seasonal peaks / supply shocks.
-        #    4w  = fast signal (onset of volatile period)
-        #    13w = slow signal (sustained seasonal high-vol window)
-        #    shift(1) avoids look-ahead: vol at t uses r_{t-1}, ..., r_{t-k}
-        out["RVol 4w"]  = _dln_spot.rolling(4).std().shift(1)
-        out["RVol 13w"] = _dln_spot.rolling(13).std().shift(1)
-        out["RVol 52w"] = _dln_spot.rolling(52).std().shift(1)
+        # Realized (rolling) volatility
+        out["RVol 4w"]  = _dln_spot.rolling(4).std().shift(1) # Fast signal for onset of volatility
+        out["RVol 13w"] = _dln_spot.rolling(13).std().shift(1) # Medium signal for sustained high-vol window (captures typical seasonal volatility peaks)
+        out["RVol 52w"] = _dln_spot.rolling(52).std().shift(1) # Slow signal for overall vol regime
 
-        # ── 2. FP–SSB spread — reconstruct contemporaneous SSB by undoing the
-        #       1-week publication lag (shift(-1)), compute ln(FP_t / SSB_t),
-        #       then shift(1) so row t shows last week's spread (first available)
+        # FP–SSB spread and log-change: For consistency SSB lag is removed to compute the spread, and instead the spread is lagged 1-week
         if "Salmon_NOK_kg_SSB_Weekly" in df.columns:
             _ssb_contemp = df["Salmon_NOK_kg_SSB_Weekly"].shift(-1)
             out["Spread (FP - SSB)"]   = (spot - _ssb_contemp).shift(1)
             out["∆ Spread (FP - SSB)"] = (spot - _ssb_contemp).diff().shift(1)
 
-        # ── 3–6. Forward bases: ln(F_t / S_{t-1}) — current forward vs last known
-        #        spot. F_t is observable same-day (FishPool end-of-day). S_{t-1}
-        #        is the spot published this week (1-week publication lag).
-        #        spot.shift(1) applies only here — not a general lag change.
+        # Forward bases: ln(F_t / S_{t-1})
+        # Apply spot.shift(1), again to account for publication lag of spot price (no lag for forwards)
         for label, col in [("FWD 1m",  "Salmon_Forward_M1_Weekly"),
                             ("FWD 3m",  "Salmon_Forward_M3_Weekly"),
                             ("FWD 6m",  "Salmon_Forward_M6_Weekly"),
@@ -441,7 +320,7 @@ class FeatureEngineer:
                 out[label]        = _basis
                 out[f"∆ {label}"] = _basis.diff()
 
-        # ── 7–8. Forward curve slope & curvature ─────────────────────────────
+        # Forward curve slope & curvature
         if all(c in df.columns for c in ["Salmon_Forward_M1_Weekly",
                                           "Salmon_Forward_M6_Weekly",
                                           "Salmon_Forward_M12_Weekly"]):
@@ -451,17 +330,16 @@ class FeatureEngineer:
             out["FWD Slope"]     = lnM12 - lnM1
             out["FWD Curvature"] = lnM1 - 2 * lnM6 + lnM12
 
-        # ── 9. Export volume: HAR-style lags 1w, 2w, 1m ─────────────────────
-        #    Short memory — Norwegian supply shocks price within 1-2 weeks.
+        # Export volume: Similar HAR-style lags 1w, 2w, 1m
+        # Short memory as we assume Norwegian supply shocks price within a month
         if "Salmon_Exported_Tons_SSB_Weekly" in df.columns:
             _exp_dln = _dln(df["Salmon_Exported_Tons_SSB_Weekly"])
             out["∆ Export Volume 1w"] = _exp_dln.rolling(1).mean().shift(1)
             out["∆ Export Volume 2w"] = _exp_dln.rolling(2).mean().shift(1)
             out["∆ Export Volume 1m"] = _exp_dln.rolling(4).mean().shift(1)
 
-        # ── 9b. Chilean Exports: HAR-style lags 1w, 2w, 1m, 3m ──────────────
-        #    Transit lag (~5-6 weeks by ship) + market penetration justifies
-        #    the 3m window on top of the standard short-memory horizons.
+        # Chilean Exports: Similar HAR-style lags 1w, 2w, 1m, 3m
+        # Longer memory to account for transit lag (5-6 weeks by ship) and market penetration of Chilean salmon in Europe
         if "Salmon_Chile_Export_Volume_Weekly" in df.columns:
             _chile = df["Salmon_Chile_Export_Volume_Weekly"]
             _chile_changed = _chile != _chile.shift(1)
@@ -473,10 +351,8 @@ class FeatureEngineer:
             out["∆ Chilean Exports 1m"] = _chile_dln.rolling(4).mean().shift(1)
             out["∆ Chilean Exports 3m"] = _chile_dln.rolling(13).mean().shift(1)
 
-        # ── 10–11. Biomass (1-2) and (2+) — removed (not usable)
-
-        # ── 13b. Total biomass MoM Δln (compute at transitions, ffill within month)
-        #        + YoY: ln(x_t) − ln(x_{t-52}) — cumulative log return vs same week last year
+        # Total biomass MoM Δln and YOY cummulative log returns
+        # Compute at transitions, ffill within month, to avoid zeros as data is published monthly (Done for all monthly variables)
         if "Salmon_Biomass_Kg_Monthly" in df.columns:
             _tbio = df["Salmon_Biomass_Kg_Monthly"]
             _tbio_changed = _tbio != _tbio.shift(1)
@@ -487,15 +363,15 @@ class FeatureEngineer:
             _ln_tbio = _ln(_tbio)
             out["∆YOY Total Biomass Monthly"] = _ln_tbio - _ln_tbio.shift(52)
 
-        # ── 14. Average weight kg/fish
-        #        + YoY: ln(x_t) − ln(x_{t-52}) — level vs same week last year
+        # Average weight: kg/fish and YOY cummulative log returns
         if all(c in df.columns for c in ["Salmon_Biomass_Kg_Monthly",
                                           "Salmon_Biomass_Fish_Stock_Monthly"]):
             _avgw = df["Salmon_Biomass_Kg_Monthly"] / df["Salmon_Biomass_Fish_Stock_Monthly"]
             out["Avg Weight (KG) Monthly"] = _avgw
             out["YOY Avg Weight (KG) Monthly"] = _ln(_avgw) - _ln(_avgw).shift(52)
 
-        # ── 15–18. Derived ratios ─────────────────────────────────────────────
+        # Harvest intensity and loss rate: HAR-style lags 1m, 3m for harvest intensity, 1m, 3m, 6m for loss rate
+        # Intuitively, harvest intensity has a more immediate effect on prices
         bkg   = "Salmon_Biomass_Kg_Monthly"
         stock = "Salmon_Biomass_Fish_Stock_Monthly"
 
@@ -515,10 +391,8 @@ class FeatureEngineer:
             out["Loss Rate 3m Monthly"] = _loss_rate.rolling(13).mean()
             out["Loss Rate 6m Monthly"] = _loss_rate.rolling(26).mean()
 
-        # ── 19. Smolt: ln-level, individual monthly lags 2m–18m ─────────────────
-        #    Publication lag already covers ~1m. Lags 2m–18m cover the full
-        #    14–18 month grow-out cycle across all forecast horizons (Y 0w–Y 12m).
-        #    Resampled to monthly before shifting to avoid week-count drift.
+        # Smolt: ln-level, individual monthly lags 3m–19m (publication lag already covers one month)
+        # Lags are directed at different forecast horizons from Y 0w to Y 12m with a 14 - 18 month growth cycle from smolt release to harvest
         if "Salmon_Biomass_Smolt_Releases_Monthly" in df.columns:
             _ln_smolt = _ln(df["Salmon_Biomass_Smolt_Releases_Monthly"])
             _dates = pd.to_datetime(df["Date"])
@@ -537,24 +411,26 @@ class FeatureEngineer:
                 )
                 out[f"Smolt Release {_m}m Monthly"] = _shifted
 
-        # ── 20. ISA outbreak: current + 1m and 3m rolling means (Corsi-consistent)
+        # ISA outbreak: Similar HAR-style with current + 1m and 3m rolling means
         if "Salmon_ILA_ActiveLocalities_Weekly" in df.columns:
             _isa = df["Salmon_ILA_ActiveLocalities_Weekly"]
             out["ISA Outbreak"]    = _isa
             out["ISA Outbreak 1m"] = _isa.rolling(4).mean().shift(1)
             out["ISA Outbreak 3m"] = _isa.rolling(13).mean().shift(1)
 
-        # ── 21. Lice outbreak: current + 1m and 3m rolling means (Corsi-consistent)
+        # Lice outbreak: Similar HAR-style with current + 1m and 3m rolling means
         if "Salmon_Lice_AvgFemale_Weekly" in df.columns:
             _lice = df["Salmon_Lice_AvgFemale_Weekly"]
             out["Lice Outbreak"]    = _lice
             out["Lice Outbreak 1m"] = _lice.rolling(4).mean().shift(1)
             out["Lice Outbreak 3m"] = _lice.rolling(13).mean().shift(1)
+
+        # Sea temp: Both current and 12m rolling average (to account for immediate and long-term effects)
         if "Salmon_SeaTemp_3m_Weekly" in df.columns:
             out["Sea Temp"]         = df["Salmon_SeaTemp_3m_Weekly"]
             out["Sea Temp 12m Avg"] = df["Salmon_SeaTemp_3m_Weekly"].rolling(52).mean()
 
-        # ── 24. EURNOK Δln — contemporaneous (no publication lag) + HAR lags ──────
+        # EURNOK Δln with HAR-style lags 1w, 2w, 1m, 3m, 6m, 12m
         if "EURNOK_Weekly" in df.columns:
             _dln_eurnok = _dln(df["EURNOK_Weekly"])
             out["∆ EURNOK"]     = _dln_eurnok
@@ -565,15 +441,15 @@ class FeatureEngineer:
             out["∆ EURNOK 6m"]  = _dln_eurnok.rolling(26).mean().shift(1)
             out["∆ EURNOK 12m"] = _dln_eurnok.rolling(52).mean().shift(1)
 
-        # ── 25. CPI Norway (level, already YoY %) ────────────────────────────
+        # CPI Norway (level, already YoY %)
         if "CPI_Norway_Monthly" in df.columns:
             out["CPI NO Monthly"] = df["CPI_Norway_Monthly"]
 
-        # ── 25b. NIBOR 3m (raw level, already stationary) ────────────────────
+        # NIBOR 3m (raw level)
         if "NIBOR_3m_Weekly" in df.columns:
             out["NIBOR 3m"] = df["NIBOR_3m_Weekly"]
 
-        # ── 26. Shrimp Δln — HAR structure (4-week publication lag, no contemporaneous)
+        # Shrimp Δln: HAR structure with 1m, 3m, 6m and 12m rolling mean
         if "Protein_Shrimp_USD_mt_Weekly" in df.columns:
             _shrimp = df["Protein_Shrimp_USD_mt_Weekly"]
             _shrimp_changed = _shrimp != _shrimp.shift(1)
@@ -582,8 +458,7 @@ class FeatureEngineer:
             _shrimp_dln = _shrimp_dln.ffill()
             out["∆ Shrimp Price (Global) 1m Monthly"] = _shrimp_dln
 
-            # Rolling averages: resample to monthly first to avoid over-weighting
-            # forward-filled weekly repetitions, then reindex back to weekly
+            # Rolling averages
             _dates = pd.to_datetime(df["Date"])
             _shrimp_dln_monthly = (
                 _shrimp_dln
@@ -600,10 +475,8 @@ class FeatureEngineer:
                 )
                 out[f"∆ Shrimp Price (Global) {_label} Monthly"] = _rolled
 
-        # ── 27–28. Competing proteins Δln (HAR structure) ────────────────────
-        # Broiler: W-WED resample places Friday publication in following bin,
-        #          so _dln_p is already a 1w lag — label accordingly, no extra shift(1).
-        # Pig: published Wed (current week), so _dln_p is contemporaneous.
+        # Competing proteins Δln with HAR structure
+        # For pig: Published in current week based on Mon-Tue negotiations, so we can include the current week
         if "Protein_Broiler_EUR_100_kg_Weekly" in df.columns:
             _dln_b = _dln(df["Protein_Broiler_EUR_100_kg_Weekly"])
             out["∆ Broiler Price (EU) 1w"]  = _dln_b
@@ -623,11 +496,11 @@ class FeatureEngineer:
             out["∆ Pig Price (EU) 6m"]  = _dln_pig.rolling(27).mean()
             out["∆ Pig Price (EU) 12m"] = _dln_pig.rolling(53).mean()
 
-        # ── 29. Meat Inflation YoY (deferred) ────────────────────────────────
+        # CPI Meat EU (level, already YoY %)
         if "Protein_Meat_Inflation_YoY_Monthly" in df.columns:
             out["Meat CPI (EU) Monthly"] = df["Protein_Meat_Inflation_YoY_Monthly"]
 
-        # ── 30. Fishmeal Δln — HAR structure (4-week publication lag, no contemporaneous)
+        # Fishmeal Δln: HAR structure with 1m, 3m, 6m and 12m rolling mean
         if "Commodity_Fishmeal_USD_mt_Weekly" in df.columns:
             _fish = df["Commodity_Fishmeal_USD_mt_Weekly"]
             _fish_changed = _fish != _fish.shift(1)
@@ -636,8 +509,7 @@ class FeatureEngineer:
             _fish_dln = _fish_dln.ffill()
             out["∆ Fishmeal 1m Monthly"] = _fish_dln
 
-            # Rolling averages: resample to monthly first to avoid over-weighting
-            # forward-filled weekly repetitions, then reindex back to weekly
+            # Rolling averages
             _dates = pd.to_datetime(df["Date"])
             _fish_dln_monthly = (
                 _fish_dln
@@ -654,8 +526,8 @@ class FeatureEngineer:
                 )
                 out[f"∆ Fishmeal {_label} Monthly"] = _rolled
 
-        # ── 31–34. Commodities: slope ln(C12/C01), curvature ln(C01)−2·ln(C06)+ln(C12)
-        #          Brent and Soybean only (Wheat starts 2016, Rapeseed data unreliable)
+        # Commodities: slope ln(C12/C01), curvature ln(C01)−2·ln(C06)+ln(C12)
+        # Brent and Soybean only (Previously we had included Wheat and Rapeseed, but data was unreliable)
         _commodities = [
             ("Brent",   "Commodity_Brent_CO1_NOK_bbl_Weekly",
                         "Commodity_Brent_CO6_NOK_bbl_Weekly",
@@ -672,10 +544,9 @@ class FeatureEngineer:
 
         out = out.sort_values("Date").reset_index(drop=True)
 
-        ## Build freq_map from column naming convention.
-        ## Columns ending in "Monthly" are broadcast monthly features — EDA must
-        ## downsample them to true monthly frequency before running statistical tests.
-        ## All other columns are treated as weekly.
+        # Build freq_map from column naming convention
+        # Columns ending in "Monthly" are monthly features, all others are weekly features
+        # Done for EDA purposes to perform statistical tests consistent with the true frequency of the data
         freq_map = {
             col: ("monthly" if col.endswith("Monthly") else "weekly")
             for col in out.columns
@@ -683,24 +554,17 @@ class FeatureEngineer:
 
         return out, freq_map
 
-    ##
-    #   Validate the feature matrix produced by buildFeatureMatrix().
-    #
-    #   Checks (per column):
-    #     1. Column presence & dtypes
-    #     2. Infinite values
-    #     3. NaN counts and first/last valid date
-    #     4. Range plausibility — flags outliers beyond expected bounds
-    #     5. Δln / log-ratio columns: flags if any |value| > 0.5 (50% weekly move)
-    #     6. Proportion columns: flags if any value outside [0, 1]
-    #     7. Summary: rows fully populated (no NaN in any feature column)
-    #     8. Top-10 absolute correlations with target y
-    #
-    #   @matrix   DataFrame output of buildFeatureMatrix()
-    #
+    # Validate the feature matrix produced by buildFeatureMatrix()
+    # Checks the following:
+    #  - Column presence & dtypes
+    #  - Infinite values
+    #  - NaN counts and first/last valid date
+    #  - Range plausibility — flags outliers beyond expected bounds
+    #  - Δln / log-ratio columns: flags if any |value| > 0.5 (50% weekly move)
+    #  - Proportion columns: flags if any value outside [0, 1]
+    #  - Summary: rows fully populated (no NaN in any feature column)
+    #  - Top-10 absolute correlations with target y
     def validateFeatureMatrix(self, matrix: pd.DataFrame) -> None:
-
-        from scipy import stats as _stats
 
         SEP  = "═" * 80
         SEP2 = "─" * 80
@@ -715,13 +579,13 @@ class FeatureEngineer:
             print(f"  Date range: {matrix['Date'].min().date()} → {matrix['Date'].max().date()}")
         print(SEP)
 
-        # ── 1–5. Per-column checks ─────────────────────────────────────────────
+        # Per-column checks
         print(f"\n── COLUMN CHECKS {'─'*63}")
         hdr = f"  {'Column':<35} {'NaNs':>6}  {'First valid':>11}  {'Min':>10}  {'Max':>10}  {'Infs':>5}  Status"
         print(hdr)
         print(f"  {'─'*35} {'─'*6}  {'─'*11}  {'─'*10}  {'─'*10}  {'─'*5}  ──────")
 
-        # Expected bounds for quick plausibility check
+        # Expected bounds for plausibility check
         _dln_cols  = [c for c in feat_cols if c.endswith("_dln") or c == "spot_dln_lag1" or c == "y"]
         _prop_cols = [c for c in feat_cols if any(x in c for x in
                       ["share", "pct_treated", "harvest_intensity", "loss_rate",
@@ -760,7 +624,7 @@ class FeatureEngineer:
             print(f"  {col_disp:<35} {nan_count:>6}  {str(first_valid):>11}  "
                   f"{col_min:>10}  {col_max:>10}  {inf_count:>5}  {status}")
 
-        # ── 6. Proportion sanity ───────────────────────────────────────────────
+        # Proportion check for columns that are expected to be in [0, 1]
         print(f"\n── PROPORTION COLUMNS (should be in [0, ~1]) {'─'*35}")
         for col in _prop_cols:
             s = matrix[col].dropna()
@@ -769,7 +633,7 @@ class FeatureEngineer:
             ok = "✓" if s.min() >= 0 and s.max() <= 1.5 else f"⚠  min={s.min():.4f}  max={s.max():.4f}"
             print(f"  {col:<40}  {ok}")
 
-        # ── 7. Fully populated rows ────────────────────────────────────────────
+        # Row completeness
         print(f"\n── ROW COMPLETENESS {'─'*60}")
         core_cols   = [c for c in feat_cols if c not in
                        ("fp_ssb_spread", "mortality_rate", "meat_inflation_yoy")]
@@ -781,7 +645,7 @@ class FeatureEngineer:
         print(f"  First fully-populated row         : {first_full}")
         print(f"  (Excluded from core: fp_ssb_spread, mortality_rate, meat_inflation_yoy)")
 
-        # ── 8. Correlation with target y ──────────────────────────────────────
+        # Correlation with target y
         if "y" in matrix.columns:
             print(f"\n── TOP-10 ABSOLUTE CORRELATIONS WITH TARGET y {'─'*34}")
             corr = (matrix[feat_cols + ["y"]]
@@ -795,7 +659,7 @@ class FeatureEngineer:
                 bar = "█" * int(val * 20)
                 print(f"  {col:<40}  {val:>6.4f}  {bar}")
 
-        # ── Summary ───────────────────────────────────────────────────────────
+        # Summary
         print(f"\n{SEP2}")
         if issues:
             print(f"  ⚠  {len(issues)} column(s) flagged: {', '.join(issues)}")

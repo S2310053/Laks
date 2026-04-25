@@ -9,15 +9,10 @@
 # Further adjustments are made in feature_engineering.py, to account for publication lags and other timing issues in the raw data
 ##
 
-
-
 import pandas as pd
 import numpy as np
 
-##
-# This class loads, processes the several salmon data time series
-# addressed in the Thesis. For each dataset, returns the clean version.
-#
+
 class DataLoader:
 
     # File paths
@@ -54,14 +49,12 @@ class DataLoader:
     EQUITY_PRICE_MOWI      = _salmon + _salmonEquity + "Price_MOWI.xlsx"
     EQUITY_PRICE_SALMAR    = _salmon + _salmonEquity + "Price_SALMAR.xlsx"
 
-    
+    # The class is for uploading, cleaning and transformations of the different datasets, which returns a dictionary of clean DataFrames
     def __init__(self):
         pass
-    # The class is for uploading, cleaning and transformations of the different datasets, which returns a dictionary of clean DataFrames
 
-
-    def _loadWeekly(self, fileName, columnName, freq="daily"):
     # Converts data to weekly frequency aligned to Wednesday (Mid-week pricing)
+    def _loadWeekly(self, fileName, columnName, freq="daily"):
 
         # Read sheets
         _data = pd.read_excel(fileName, sheet_name=None, header=0)
@@ -138,9 +131,8 @@ class DataLoader:
 
         return dataFinal
     
-
+    # Returns weekly salmon price per kg, in NOK and EUR, starting from January 2006
     def SalmonPriceFishPool(self):
-     # Returns weekly salmon price per kg, in NOK and EUR, starting from January 2006
 
         # Load file and format (Clean)
         _fileName    = self.SALMON_PRICE_FISHPOOL
@@ -172,9 +164,8 @@ class DataLoader:
 
         return dataTransform
     
- 
-    def SalmonPriceSSB(self):
     #  Returns weekly exported salmon tons and price per kilogram in NOK, starting from January 2000
+    def SalmonPriceSSB(self):
 
         # Clean  
         _fileName     = self.SALMON_PRICE_SSB
@@ -204,8 +195,8 @@ class DataLoader:
         
         return dataTransform
 
-    def SalmonBiomass(self):
     # Returns panel of monthly production-area-level aquaculture data on stock, biomass, feed, harvest, and losses, starting from January 2000
+    def SalmonBiomass(self):
 
         # Clean
         _fileName      = self.SALMON_BIOMASS
@@ -242,9 +233,8 @@ class DataLoader:
 
         return dataTransform
 
-
+    # Returns weekly lice data, starting from January 2012
     def SalmonLice(self):
-    # Returns weekly national average female lice per fish, sea temperature at 3m, % sites above 0.5 limit, % sites with any treatment, Starting from January 2012
 
         # Clean
         _fileName   = self.SALMON_LICE
@@ -301,9 +291,8 @@ class DataLoader:
 
         return dataTransform
 
-
-    def SalmonILA(self):
     # Returns weekly count of unique ILA localities, starting from January 2012
+    def SalmonILA(self):
 
         _data = pd.read_csv(self.SALMON_ILA, sep=",", encoding="utf-8-sig", low_memory=False)
 
@@ -354,9 +343,8 @@ class DataLoader:
 
         return dataTransform
 
-
-    def CPINorway(self):
     # Returns Monthly YOY CPI in percentage, starting from January 1932
+    def CPINorway(self):
 
         # Clean
         _fileName      = self.CPI_NORWAY
@@ -397,9 +385,8 @@ class DataLoader:
         
         return dataTransform
 
-
-    def ProteinCPIMeat(self):
     # Returns Monthly YOY CPI in percentage, starting from January 2012
+    def ProteinCPIMeat(self):
         
         # Clean
         _fileName         = self.PROTEIN_CPI_MEAT
@@ -425,9 +412,8 @@ class DataLoader:
 
         return dataTransform
     
-
-    def ProteinBroilerPrice(self):
     # Returns weekly broiler price per 100 kg, converted to NOK, starting from January 2012
+    def ProteinBroilerPrice(self):
 
         # Clean
         _data = pd.read_excel(self.PROTEIN_PRICE_BROILER, header=0)
@@ -463,9 +449,8 @@ class DataLoader:
 
         return dataTransform
 
- 
-    def ProteinPigPrice(self):
     # Returns weekly pig price per 100 kg, converted to NOK, starting from January 2014
+    def ProteinPigPrice(self):
 
         # Clean
         _data = pd.read_excel(self.PROTEIN_PRICE_PIG, header=0)
@@ -501,27 +486,24 @@ class DataLoader:
 
         return dataTransform
 
-  
-    def EURNOK(self):
     # Returns weekly (Every wednesday) EURNOK exchange rate, starting from January 2000
+    def EURNOK(self):
 
         return self._loadWeekly(
                             self.CURRENCY_EURNOK,
                             "EURNOK_Weekly", freq = "weekly"
                             )
 
- 
+    # Returns weekly (Every wednesday) USDNOK exchange rate, starting from January 2000
     def USDNOK(self):
-     # Returns weekly (Every wednesday) USDNOK exchange rate, starting from January 2000
 
         return self._loadWeekly(
                                 self.CURRENCY_USDNOK,
                                 "USDNOK_Weekly", freq = "weekly"
                                )
     
-    
-    def CommodityBrentPrice(self):
     # Returns weekly Brent forward prices per barrel in NOK, starting from January 2000
+    def CommodityBrentPrice(self):
         
         return self._loadWeekly(
             self.COMMODITY_BRENT,
@@ -535,9 +517,8 @@ class DataLoader:
             "Commodity_Brent_CO12_NOK_bbl_Weekly"], freq= "daily"
         )
 
-
-    def CommoditySoybeanPrice(self):
     # Returns weekly soybean forward prices per short ton in NOK, starting from January 2000
+    def CommoditySoybeanPrice(self):
 
         return self._loadWeekly(
             self.COMMODITY_SOYBEAN,
@@ -551,27 +532,24 @@ class DataLoader:
             "Commodity_Soybean_SM12_NOK_st_Weekly"], freq = "daily"
         )
     
-
-    def EquityMOWIPrice(self):
     # Returns weekly share price for MOWI in NOK, starting from January 2000
+    def EquityMOWIPrice(self):
 
         return self._loadWeekly(
             self.EQUITY_PRICE_MOWI,
             "Equity_MOWI_NOK_Weekly", freq = "daily"
         )
 
-
-    def EquitySALMARPrice(self):
     # Returns weekly share price for SALMAR in NOK, starting from January 2000
+    def EquitySALMARPrice(self):
 
         return self._loadWeekly(
             self.EQUITY_PRICE_SALMAR,
             "Equity_SALMAR_NOK_Weekly", freq = "daily"
         )
 
-
-    def NIBOR3m(self):
     # Return weekly (Every Wednsday) NIBOR 3m rate in percentage, starting from January 2000
+    def NIBOR3m(self):
 
         # Clean
         _data = pd.read_excel(self.SALMON_NIBOR, sheet_name="NIBOR3M", header=0)
@@ -598,9 +576,8 @@ class DataLoader:
 
         return dataTransform
 
-
-    def SalmonChileExports(self):
     # Return weekly Chilean salmon export value, converted to NOK millions, starting from January 2000
+    def SalmonChileExports(self):
 
         # Clean
         _data = pd.read_excel(self.SALMON_CHILE_EXPORTS, header=0)
@@ -645,8 +622,8 @@ class DataLoader:
 
         return dataTransform
 
-    def CommodityFishmeelPrice(self):
     # Return weekly fishmeal price, converted to NOK per metric ton, starting from January 2000
+    def CommodityFishmeelPrice(self):
 
         # Clean
         _fileName = self.COMMODITY_FISHMEAL
@@ -693,9 +670,8 @@ class DataLoader:
 
         return dataTransform
 
-
-    def ProteinGlobalShrimpPrice(self):
     # Return weekly shrimp price, converted to NOK per metric ton, starting from January 1992
+    def ProteinGlobalShrimpPrice(self):
 
         # Clean
         _fileName = self.PROTEIN_SHRIMP_PRICE
@@ -723,7 +699,7 @@ class DataLoader:
         )
         dataClean["Protein_Shrimp_USD_mt_Weekly"] = dataClean["Shrimp_USD"] * dataClean["USDNOK"]
 
-        ## Transform: forward-fill monthly NOK price to weekly Wednesday (since price is only published monthly)
+        # Transform: forward-fill monthly NOK price to weekly Wednesday (since price is only published monthly)
         dataTransform = (
             dataClean[["Date", "Protein_Shrimp_USD_mt_Weekly"]]
             .set_index("Date")
@@ -745,9 +721,8 @@ class DataLoader:
 
         return dataTransform
 
-
-    def SalmonForwardPrice(self):
     # Return weekly salmon forward price, for different horizons, per kg in NOK, starting from January 2006
+    def SalmonForwardPrice(self):
 
         # Extracting different maturity horizons from the raw data
         _horizons = {1: "M1", 3: "M3", 6: "M6", 12: "M12"}
@@ -839,9 +814,8 @@ class DataLoader:
 
         return dataTransform
 
-
-    def Data(self):
     # Return a single merged dataset with all features, aligned on a weekly Wednesday calendar, starting from January 2000. Monthly features are forward-filled to each Wednesday until the next monthly observation.
+    def Data(self):
 
         ## Load datasets
         _data        = self.SalmonPriceFishPool()
@@ -965,9 +939,8 @@ class DataLoader:
 
         return data
     
-
-    def ValidateData(self, data):
     # Validates data and return diagnostic output and assertions
+    def ValidateData(self, data):
 
         print("\n--- DATASET STRUCTURE ---")
         print("Rows   :", len(data))

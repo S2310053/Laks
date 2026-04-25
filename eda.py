@@ -30,14 +30,12 @@ from statsmodels.tsa.stattools    import adfuller, acf, pacf
 from statsmodels.stats.diagnostic import acorr_ljungbox, het_arch
 from statsmodels.tsa.seasonal     import STL
 
-# ── global style ──────────────────────────────────────────────────────────────
+# Style and colour pallette for plots and pdf tables
 plt.rcParams["font.family"]         = "Times New Roman"
 plt.rcParams["mathtext.fontset"]    = "custom"
 plt.rcParams["mathtext.rm"]         = "Times New Roman"
 plt.rcParams["mathtext.it"]         = "Times New Roman:italic"
 plt.rcParams["mathtext.bf"]         = "Times New Roman:bold"
-
-# ── palette ───────────────────────────────────────────────────────────────────
 _BLUE   = "#1A6B8A"
 _RED    = "#C4654A"
 _TEAL   = "#2A9D8F"
@@ -85,8 +83,7 @@ class EDA:
         self._monthly_cols = [c for c in self._valid_cols
                               if self._freq_map.get(c) == "monthly"]
 
-    # ── helpers ───────────────────────────────────────────────────────────────
-
+    # Helper functions
     def _path(self, filename: str) -> str:
         return os.path.join(self.RESULTS_DIR, filename)
 
