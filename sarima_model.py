@@ -1,22 +1,15 @@
+# This module constructs the sARIMA model
+
 ##
-#  SARIMA model — all Y horizons
-#  Purged walk-forward CV; parameters selected by BIC via auto_arima
-#  Includes: random walk baseline, Diebold-Mariano test
-#  Final holdout: 2022–2025
-#
-#  SARIMA is univariate: input = weekly log-return r_t (Y 0w column).
-#  Parameters are estimated ONCE per fold on the training period.
-#  At each test date, the Kalman filter is re-run on ACTUAL observed
-#  history via statsmodels `apply(refit=False)` — this conditions
-#  predictions on real data without re-estimating parameters.
-#
-#  Note: Y 0w is a nowcast (S_t and F_t are Wednesday closes, simultaneously
-#  determined). Results for Y 0w should be labelled nowcast, not forecast.
+# We construct the sARIMA model for all y horizons (using same setup as with OLS to get results for CV splits as well)
+# Parameters are selected by BIC. Reason for choosing sARIMA, is that salmon prices show strong seasonality,
+# and sARIMA is a natural choice for univariate time series with seasonality
+# Note: We ran into an issue with estimation in holdout period, where estimates went to zero and became constant
+# We added the Kalman filter, to re-run on observed history, to condition predictions on real data without re-estimating parameters
 ##
 
 import warnings
 warnings.filterwarnings("ignore")
-
 import pandas as pd
 import numpy as np
 import re, os, time
@@ -26,7 +19,7 @@ matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
-# ── thesis plot style ─────────────────────────────────────────────────────────
+# Plot style based on Thesis template
 plt.rcParams["font.family"]      = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "custom"
 plt.rcParams["mathtext.rm"]      = "Times New Roman"
@@ -37,6 +30,7 @@ _BLUE = "#1A6B8A"
 _DARK = "#0D3B5E"
 _GREY = "dimgrey"
 
+# Helper to style axes consistently
 def _style_ax(ax, ylabel=""):
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
@@ -49,20 +43,22 @@ from metrics import Metrics
 metrics = Metrics()
 from plotter import Plotter
 
-## ── Config ───────────────────────────────────────────────────────────────────
+# Configuration
 HOLDOUT_START  = "2022-01-01"
 WEEKLY_RET_COL = "Y 0w ∆ Salmon (NOK/KG)"   # r_t = ln(S_t / S_{t-1})
 
+# Create folder to store results
 RESULTS_DIR = "Results/SARIMA"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
-## ── Load data ────────────────────────────────────────────────────────────────
+# Load data
 df = pd.read_csv("Data/Factors.csv", parse_dates=["Date"])
 
+# Identify Y columns
 Y_COLS = [c for c in df.columns if c.startswith("Y ")]
 
-## ── Horizon config ───────────────────────────────────────────────────────────
-#  steps = number of consecutive weekly log-returns summed in the target
+# Same structure as OLS for comparison
+# steps = number of consecutive weekly log-returns summed in the target
 HORIZON_CONFIG = {
     "0w":  {"purge_weeks":  0, "n_folds": 10, "steps":  1},
     "1w":  {"purge_weeks":  1, "n_folds": 10, "steps":  2},
@@ -73,9 +69,11 @@ HORIZON_CONFIG = {
     "12m": {"purge_weeks": 52, "n_folds":  4, "steps": 53},
 }
 
-## ── SARIMA settings ──────────────────────────────────────────────────────────
-#  m=52: weekly data, annual seasonal cycle.
-#  d=0, D=0: log-returns are already stationary.
+# SARIMA settings 
+# m=52: weekly data, annual seasonal cycle
+# d=0, D=0: log-returns are already stationary
+# Note: We use BIC as target. This and other settings can be adjusted if seen fit
+# NB! Using max_p/q leads to long estimations times for some folds — adjust if needed
 def _fit_sarima(series):
     return auto_arima(
         series,
@@ -93,11 +91,12 @@ def _fit_sarima(series):
         suppress_warnings     = True,
     )
 
+# Helper to extract horizon from Y column name
 def parse_horizon(target):
     m = re.search(r"Y (\d+(?:w|m)) ", target)
     return m.group(1) if m else "0w"
 
-## ── Purged walk-forward CV ───────────────────────────────────────────────────
+# Purged k-fold CV 
 def cv_sarima(df_all, cv_data, target, weekly_ret_col, purge_weeks, n_folds, steps):
     n         = len(cv_data)
     fold_size = n // n_folds
@@ -136,10 +135,10 @@ def cv_sarima(df_all, cv_data, target, weekly_ret_col, purge_weeks, n_folds, ste
                 fc      = applied.forecast(steps=steps)
                 preds[j] = float(np.sum(fc))
 
-            print(f"      fold {i}/{n_folds-1}  {order}  ({time.time()-t0:.0f}s)")
+            print(f"fold {i}/{n_folds-1}  {order}  ({time.time()-t0:.0f}s)")
 
         except Exception as e:
-            print(f"      fold {i} FAILED: {e}")
+            print(f"fold {i} FAILED: {e}")
             continue
 
         results.append({
@@ -152,7 +151,7 @@ def cv_sarima(df_all, cv_data, target, weekly_ret_col, purge_weeks, n_folds, ste
 
     return results
 
-## ── Run per Y horizon ────────────────────────────────────────────────────────
+# Run model for all horizons
 summary = []
 
 for target in Y_COLS:
@@ -172,11 +171,11 @@ for target in Y_COLS:
         print(f"[SKIP] {target}")
         continue
 
-    label = f"{target}  [NOWCAST]" if is_nowcast else target
-    print(f"\n{label}  (horizon={horizon}, purge={purge_wks}w, folds={n_folds}, steps={steps})")
+    label = f"{target} [NOWCAST]" if is_nowcast else target
+    print(f"\n{label} (horizon={horizon}, purge={purge_wks}w, folds={n_folds}, steps={steps})")
 
-    ## ── Purged CV ────────────────────────────────────────────────────────────
-    print(f"  Running CV (m=52, seasonal) ...")
+    # Performance evaluation on Purged CV splits
+    print(f"Running CV (m=52, seasonal)...")
     t0 = time.time()
     fold_results = cv_sarima(df, cv_data, target, WEEKLY_RET_COL,
                               purge_wks, n_folds, steps)
@@ -190,16 +189,16 @@ for target in Y_COLS:
         cv_rw_rmse = metrics.rw_rmse(cv_actuals)
         cv_r2      = metrics.r2(cv_actuals, cv_preds)
         cv_hitrate = metrics.hit_rate(cv_actuals, cv_preds)
-        print(f"  CV       RMSE={cv_rmse:.4f}  RW_RMSE={cv_rw_rmse:.4f}  "
+        print(f"CV RMSE={cv_rmse:.4f} RW_RMSE={cv_rw_rmse:.4f}  "
               f"R²={cv_r2:.4f}  Hit={cv_hitrate:.1%}  "
               f"(n_obs={len(cv_actuals)}, folds={len(fold_results)}, {time.time()-t0:.0f}s)")
     else:
         cv_rmse = cv_rw_rmse = cv_r2 = cv_hitrate = None
         cv_preds = cv_actuals = cv_dates = []
-        print("  CV       insufficient data")
+        print("CV: insufficient data")
 
-    ## ── Final model — trained on all pre-holdout weekly returns ──────────────
-    print(f"  Running holdout ...")
+    # Final sARIMA on full training set
+    print(f"Running holdout ...")
     t0 = time.time()
 
     weekly_ret_full = (
@@ -227,6 +226,7 @@ for target in Y_COLS:
             fc      = applied.forecast(steps=steps)
             hold_preds[j] = float(np.sum(fc))
 
+        # Holdout period performance
         hold_actuals  = hold_data[target].values
         hold_rmse     = metrics.rmse(hold_actuals, hold_preds)
         hold_rw_rmse  = metrics.rw_rmse(hold_actuals)
@@ -234,7 +234,7 @@ for target in Y_COLS:
         hold_hitrate  = metrics.hit_rate(hold_actuals, hold_preds)
         dm_stat, dm_p = metrics.diebold_mariano(hold_actuals, hold_preds, horizon=max(purge_wks, 1))
 
-        print(f"  Holdout  RMSE={hold_rmse:.4f}  RW_RMSE={hold_rw_rmse:.4f}  "
+        print(f"Holdout RMSE={hold_rmse:.4f} RW_RMSE={hold_rw_rmse:.4f}  "
               f"R²={hold_r2:.4f}  Hit={hold_hitrate:.1%}  "
               f"DM={dm_stat:.2f}  p={dm_p:.3f}  ({hold_order}, {time.time()-t0:.0f}s)")
 
@@ -242,7 +242,7 @@ for target in Y_COLS:
         hold_rmse = hold_rw_rmse = hold_r2 = hold_hitrate = None
         dm_stat = dm_p = None
         hold_actuals = hold_data[target].values
-        print(f"  Holdout  FAILED: {e}")
+        print(f"Holdout FAILED: {e}")
 
     summary.append({
         "Y":             target,
@@ -263,7 +263,7 @@ for target in Y_COLS:
         "n_holdout":     len(hold_data),
     })
 
-    ## ── Plot ─────────────────────────────────────────────────────────────────
+    # Plot
     n_axes = 2 if len(cv_preds) > 0 else 1
     fig, axes = plt.subplots(n_axes, 1, figsize=(14, 5 * n_axes), facecolor="white")
     if n_axes == 1:
@@ -300,13 +300,13 @@ for target in Y_COLS:
     plt.savefig(f"{RESULTS_DIR}/sarima_{safe_name}.pdf", format="pdf", bbox_inches="tight")
     plt.close()
 
-## ── Summary table ────────────────────────────────────────────────────────────
-print("\n── Summary ──────────────────────────────────────────────────────────")
+#Summary table
+print("\n Summary of sARIMA results")
 summary_df = pd.DataFrame(summary).set_index("Y")
 print(summary_df.to_string())
 summary_df.to_csv(f"{RESULTS_DIR}/sarima_summary.csv")
 
-## ── PDF results table ────────────────────────────────────────────────────────
+# PDF results table
 disp = pd.DataFrame({
     "Horizon":   [r["Horizon"] for r in summary],
     "CV RMSE":   [metrics.fmt(r["CV RMSE"]) for r in summary],
@@ -326,7 +326,7 @@ disp = pd.DataFrame({
 
 Plotter().results_table(
     disp,
-    "SARIMA — Results Summary\nHoldout: 2022–2025  |  Purged Walk-Forward CV  |  BIC Selection (m=52)",
+    "SARIMA — Results Summary\nHoldout: 2022–2025 | Purged CV | BIC Selection (m=52)",
     f"{RESULTS_DIR}/sarima_results.pdf",
     width=18,
 )

@@ -289,7 +289,7 @@ for target in Y_COLS:
     plt.close()
 
 #Summary table
-print("\n Summary of results:")
+print("\n Summary of CatBoost model results:")
 summary_df = pd.DataFrame(summary).set_index("Y")
 print(summary_df.to_string())
 summary_df.to_csv(f"{RESULTS_DIR}/catboost_summary.csv")

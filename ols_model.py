@@ -1,13 +1,12 @@
+# This module constructs the OLS model
+
 ##
-#  OLS model — single forward price per horizon
-#  Purged walk-forward CV; plain OLS via statsmodels
-#  Includes: random walk baseline, Diebold-Mariano test, β=1 test (EH)
-#  Final holdout: 2022–2025
-#
-#  For each horizon h, fits:  Y_h = α + β · FWD_h + ε
-#  Tests H0: β=1 (Expectations Hypothesis — forward is unbiased predictor)
-#
-#  Only horizons with a matching forward contract are run (1m, 3m, 6m, 12m).
+# We construct the OLS model using only the forward price as a predictor for the corresponding horizon's return,
+# to serve as benchmark for evaluating performance of the other models. Forward prices are the market's consensus forecasts,
+# so it gives a natural baseline of the market expectations, suitable for comparison
+# For each horizon h, fits:  Y_h = α + β · FWD_h + ε
+# Tests H0: β=1 (Expectations Hypothesis — forward is unbiased predictor)
+# Only horizons with a matching forward contract are run (1m, 3m, 6m, 12m)
 ##
 
 import pandas as pd
@@ -23,7 +22,7 @@ matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
-# ── thesis plot style ─────────────────────────────────────────────────────────
+# Plot style based on Thesis template
 plt.rcParams["font.family"]      = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "custom"
 plt.rcParams["mathtext.rm"]      = "Times New Roman"
@@ -34,6 +33,7 @@ _BLUE = "#1A6B8A"
 _DARK = "#0D3B5E"
 _GREY = "dimgrey"
 
+# Helper to style axes consistently
 def _style_ax(ax, ylabel=""):
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
@@ -43,7 +43,7 @@ def _style_ax(ax, ylabel=""):
     ax.xaxis.set_major_locator(mdates.YearLocator(2))
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
 
-## ── Load data ────────────────────────────────────────────────────────────────
+# Create folder to store results
 df = pd.read_csv("Data/Factors.csv", parse_dates=["Date"])
 
 HOLDOUT_START = "2022-01-01"
@@ -51,8 +51,8 @@ HOLDOUT_START = "2022-01-01"
 RESULTS_DIR = "Results/OLS"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
-## ── Horizon config ───────────────────────────────────────────────────────────
-#  Each horizon is matched to its corresponding forward basis ln(F_h / S)
+# Each horizon is matched to its corresponding forward basis ln(F_h / S)
+# Note: The purged K-fold CV is included in this code, so we can get a comparison for all the CV splits with the CatBoost results
 HORIZONS = {
     "Y 1m ∆ Salmon (NOK/KG)":  {"purge_weeks":  4, "n_folds": 10, "fwd": "FWD 1m",  "horizon": "1m"},
     "Y 3m ∆ Salmon (NOK/KG)":  {"purge_weeks": 13, "n_folds":  8, "fwd": "FWD 3m",  "horizon": "3m"},
@@ -60,8 +60,8 @@ HORIZONS = {
     "Y 12m ∆ Salmon (NOK/KG)": {"purge_weeks": 52, "n_folds":  4, "fwd": "FWD 12m", "horizon": "12m"},
 }
 
-## ── Purged walk-forward CV ───────────────────────────────────────────────────
-def purged_wf_cv(data, target, fwd_feat, purge_weeks, n_folds):
+# Purged k-fold CV
+def purged_cv(data, target, fwd_feat, purge_weeks, n_folds):
     n         = len(data)
     fold_size = n // n_folds
     results   = []
@@ -81,7 +81,8 @@ def purged_wf_cv(data, target, fwd_feat, purge_weeks, n_folds):
             continue
 
         X_train = sm.add_constant(train[fwd_feat].values)
-        ols     = sm.OLS(train[target].values, X_train).fit()
+        ols     = sm.OLS(train[target].values, X_train).fit(
+                      cov_type='HAC', cov_kwds={'maxlags': purge_weeks})
         X_test  = sm.add_constant(test[fwd_feat].values, has_constant="add")
         preds   = ols.predict(X_test)
 
@@ -94,10 +95,10 @@ def purged_wf_cv(data, target, fwd_feat, purge_weeks, n_folds):
 
     return results
 
-## ── Run per horizon ──────────────────────────────────────────────────────────
+# Run model for all horizons
 summary = []
 
-print("── OLS Forward Benchmark (Expectations Hypothesis) ─────────────────")
+print("OLS Forward Benchmark")
 
 for target, cfg in HORIZONS.items():
     fwd_feat  = cfg["fwd"]
@@ -118,8 +119,8 @@ for target, cfg in HORIZONS.items():
 
     print(f"\n{target}  (Y_{horizon} ~ FWD_{horizon}, purge={purge_wks}w, folds={n_folds})")
 
-    ## ── Purged CV ────────────────────────────────────────────────────────────
-    fold_results = purged_wf_cv(cv_data, target, fwd_feat, purge_wks, n_folds)
+    # Performance evaluation on Purged CV splits
+    fold_results = purged_cv(cv_data, target, fwd_feat, purge_wks, n_folds)
 
     if fold_results:
         cv_preds   = np.concatenate([f["preds"]   for f in fold_results])
@@ -130,29 +131,30 @@ for target, cfg in HORIZONS.items():
         cv_rw_rmse = metrics.rw_rmse(cv_actuals)
         cv_r2      = metrics.r2(cv_actuals, cv_preds)
         cv_hitrate = metrics.hit_rate(cv_actuals, cv_preds)
-        print(f"  CV       RMSE={cv_rmse:.4f}  RW_RMSE={cv_rw_rmse:.4f}  "
+        print(f"CV RMSE={cv_rmse:.4f}  RW_RMSE={cv_rw_rmse:.4f}  "
               f"R²={cv_r2:.4f}  Hit={cv_hitrate:.1%}  (n={len(cv_actuals)})")
     else:
         cv_rmse = cv_rw_rmse = cv_r2 = cv_hitrate = None
         cv_preds = cv_actuals = cv_dates = []
-        print("  CV       insufficient data")
+        print("CV: insufficient data")
 
-    ## ── Final OLS on full CV period ──────────────────────────────────────────
+    # Final OLS on full training set
     X_cv = sm.add_constant(cv_data[fwd_feat].values)
-    ols  = sm.OLS(cv_data[target].values, X_cv).fit()
+    ols  = sm.OLS(cv_data[target].values, X_cv).fit(
+               cov_type='HAC', cov_kwds={'maxlags': purge_wks})
 
     alpha_hat = ols.params[0]
     beta_hat  = ols.params[1]
     beta_se   = ols.bse[1]
 
-    # β=1 t-test (Expectations Hypothesis)
+    # β=1 t-test (Expectations Hypothesis - Is the forward price an unbiased predictor of the future spot price?)
     t_beta1 = (beta_hat - 1) / beta_se
     p_beta1 = 2 * stats.t.sf(np.abs(t_beta1), df=ols.df_resid)
 
-    print(f"  OLS      α={alpha_hat:.4f}  β={beta_hat:.4f}  SE(β)={beta_se:.4f}  "
+    print(f"OLS α={alpha_hat:.4f}  β={beta_hat:.4f}  SE(β)={beta_se:.4f}  "
           f"t(β=1)={t_beta1:.2f}  p(β=1)={p_beta1:.3f}")
 
-    ## ── Holdout ──────────────────────────────────────────────────────────────
+    # Holdout period performance
     X_hold       = sm.add_constant(hold_data[fwd_feat].values, has_constant="add")
     hold_preds   = ols.predict(X_hold)
     hold_actuals = hold_data[target].values
@@ -162,7 +164,7 @@ for target, cfg in HORIZONS.items():
     hold_hitrate = metrics.hit_rate(hold_actuals, hold_preds)
     dm_stat, dm_p = metrics.diebold_mariano(hold_actuals, hold_preds, horizon=max(purge_wks, 1))
 
-    print(f"  Holdout  RMSE={hold_rmse:.4f}  RW_RMSE={hold_rw_rmse:.4f}  "
+    print(f"Holdout RMSE={hold_rmse:.4f} RW_RMSE={hold_rw_rmse:.4f}"
           f"R²={hold_r2:.4f}  Hit={hold_hitrate:.1%}  DM={dm_stat:.2f}  p={dm_p:.3f}")
 
     summary.append({
@@ -187,7 +189,7 @@ for target, cfg in HORIZONS.items():
         "n_holdout":     len(hold_data),
     })
 
-    ## ── Plot ─────────────────────────────────────────────────────────────────
+    # Plot
     n_axes = 2 if len(cv_preds) > 0 else 1
     fig, axes = plt.subplots(n_axes, 1, figsize=(14, 5 * n_axes), facecolor="white")
     if n_axes == 1:
@@ -211,8 +213,8 @@ for target, cfg in HORIZONS.items():
     axes[ax_idx].plot(hold_data["Date"].values, hold_preds,   label="OLS",
                       color=_BLUE, lw=1.2, alpha=0.85)
     axes[ax_idx].axhline(0, color=_GREY, lw=0.8, ls="--", label="Random Walk")
-    axes[ax_idx].set_title(f"Holdout 2022–2025  —  RMSE={hold_rmse:.4f}  |  RW={hold_rw_rmse:.4f}  |  "
-                           f"R²={hold_r2:.4f}  |  DM p={dm_p:.3f}", fontsize=10)
+    axes[ax_idx].set_title(f"Holdout 2022–2025 — RMSE={hold_rmse:.4f} | RW={hold_rw_rmse:.4f}  |  "
+                           f"R²={hold_r2:.4f} | DM p={dm_p:.3f}", fontsize=10)
     axes[ax_idx].legend(frameon=False, fontsize=9)
     _style_ax(axes[ax_idx], ylabel="∆ Price (NOK/kg)")
 
@@ -221,13 +223,13 @@ for target, cfg in HORIZONS.items():
     plt.savefig(f"{RESULTS_DIR}/ols_{safe_name}.pdf", format="pdf", bbox_inches="tight")
     plt.close()
 
-## ── Summary table ────────────────────────────────────────────────────────────
-print("\n── Summary ──────────────────────────────────────────────────────────")
+# Summary table
+print("\n Summary of OLS Forward Benchmark Results")
 summary_df = pd.DataFrame(summary).set_index("Y")
 print(summary_df.to_string())
 summary_df.to_csv(f"{RESULTS_DIR}/ols_summary.csv")
 
-## ── PDF results table ────────────────────────────────────────────────────────
+# PDF results table
 disp = pd.DataFrame({
     "Horizon":   [r["Horizon"] for r in summary],
     "FWD":       [r["FWD"] for r in summary],
@@ -249,7 +251,7 @@ disp = pd.DataFrame({
 Plotter().results_table(
     disp,
     "OLS Forward Benchmark — Results Summary\n"
-    "Holdout: 2022–2025  |  Purged Walk-Forward CV  |  Y_h ~ α + β·FWD_h  (EH: β=1)",
+    "Holdout: 2022–2025 | Purged CV | Y_h ~ α + β·FWD_h  (EH: β=1)",
     f"{RESULTS_DIR}/ols_results.pdf",
     width=18,
 )

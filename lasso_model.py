@@ -1,6 +1,6 @@
 ##
 #  Lasso model — all Y horizons
-#  Purged walk-forward CV; alpha selected by inner time-series CV (LassoCV)
+#  Purged k-fold CV; alpha selected by inner time-series CV (LassoCV)
 #  Includes: random walk baseline, Diebold-Mariano test
 #  Final holdout: 2022–2025
 #
@@ -81,8 +81,8 @@ def parse_horizon(target):
     m = re.search(r"Y (\d+(?:w|m)) ", target)
     return m.group(1) if m else "0w"
 
-## ── Purged walk-forward CV ───────────────────────────────────────────────────
-def purged_wf_cv(data, target, features, purge_weeks, n_folds):
+# Purged k-fold CV (Prado et al. 2018)
+def purged_cv(data, target, features, purge_weeks, n_folds):
     n         = len(data)
     fold_size = n // n_folds
     results   = []
@@ -155,7 +155,7 @@ for target in Y_COLS:
     print(f"\n{label}  (horizon={horizon}, purge={purge_wks}w, folds={n_folds})")
 
     ## ── Purged CV ────────────────────────────────────────────────────────────
-    fold_results = purged_wf_cv(cv_data, target, ALL_FEAT, purge_wks, n_folds)
+    fold_results = purged_cv(cv_data, target, ALL_FEAT, purge_wks, n_folds)
 
     if fold_results:
         cv_preds    = np.concatenate([f["preds"]   for f in fold_results])
