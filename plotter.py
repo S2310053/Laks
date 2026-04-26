@@ -1,36 +1,27 @@
+# This module constructs the Plotter class
+
 ##
-#  Plotter — shared visualisation helpers used across all model scripts
-#
-#  results_table(): renders a styled PDF summary table (identical styling
-#  used by CatBoost, Lasso, SARIMA, and OLS scripts).
+# This module defines the Plotter class, used as a helper for the model scripts
+# It renders styled PDF tables for summarising results, to ensure consistent formatting across all models
 ##
 
 import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 
-
+# Shared plot and table rendering
 class Plotter:
-    """Shared plot and table rendering."""
 
     # Class-level style constants — same header/row colours used in all tables
     HEADER_COLOR   = "#2c3e50"
     ROW_EVEN_COLOR = "#f0f4f8"
 
+    # Transforms target column names into a safe file name by replacing problematic characters
     def safe_filename(self, target):
-        """Sanitise a target column name for use as a file name."""
         return target.replace("/", "-").replace(" ", "_").replace("∆", "d")
 
+    # Creates a styled PDF table from a DataFrame
     def results_table(self, disp, title, save_path, width=16):
-        """Render a styled PDF results table from a DataFrame.
-
-        Parameters
-        ----------
-        disp      : pd.DataFrame   — data to display
-        title     : str            — figure title (supports newlines)
-        save_path : str            — output PDF path
-        width     : float          — figure width in inches (height auto-computed)
-        """
         height  = len(disp) * 0.55 + 2.5
         fig, ax = plt.subplots(figsize=(width, height))
         ax.axis("off")

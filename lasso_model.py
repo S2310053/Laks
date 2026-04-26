@@ -206,7 +206,7 @@ for target in Y_COLS:
     hold_rw_rmse = metrics.rw_rmse(hold_actuals)
     hold_r2      = metrics.r2(hold_actuals, hold_preds)
     hold_hitrate = metrics.hit_rate(hold_actuals, hold_preds)
-    dm_stat, dm_p = metrics.diebold_mariano(hold_actuals, hold_preds)
+    dm_stat, dm_p = metrics.diebold_mariano(hold_actuals, hold_preds, horizon=max(purge_wks, 1))
 
     n_nonzero_final = int(np.sum(final_model.coef_ != 0))
     best_alpha      = final_model.alpha_
