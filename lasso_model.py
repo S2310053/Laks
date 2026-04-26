@@ -1,14 +1,12 @@
+# This module constructs the LASSO regression model
+
 ##
-#  Lasso model — all Y horizons
-#  Purged k-fold CV; alpha selected by inner time-series CV (LassoCV)
-#  Includes: random walk baseline, Diebold-Mariano test
-#  Final holdout: 2022–2025
-#
-#  Features are standardised inside each fold (StandardScaler fit on train only)
-#  to make the L1 penalty scale-invariant across heterogeneous regressors.
-#
-#  Note: Y 0w is a nowcast (S_t and F_t are Wednesday closes, simultaneously
-#  determined). Results for Y 0w should be labelled nowcast, not forecast.
+# We construct the Lasso model for all horizons. We considered using normal OLS, where we'd choose feature based on economic theory
+# In favour of this, and as a important part of our thesis (where we want to analyse how good machine algoritms can be at forecasting salmon prices),
+# we decided to use the Lasso regression, which can perform automatic feature selection by shrinking coefficients to zero
+# We believe that if we had done this instead, it would both be time-consuming and include subjectivity in selection process, which can lead to biases in results
+# This way the data speak for itself, and performance is based on how good the algoritims can select relevant features
+# We use standard L1 penalty, and select the regularisation strength (alpha) using nested cross-validation within the training set to avoid look-ahead bias
 ##
 
 import pandas as pd
@@ -22,7 +20,7 @@ matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
-# ── thesis plot style ─────────────────────────────────────────────────────────
+# Plot style based on Thesis template
 plt.rcParams["font.family"]      = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "custom"
 plt.rcParams["mathtext.rm"]      = "Times New Roman"
@@ -34,6 +32,7 @@ _RED  = "#C4654A"
 _DARK = "#0D3B5E"
 _GREY = "dimgrey"
 
+# Helper to style axes consistently
 def _style_ax(ax, ylabel=""):
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
@@ -46,19 +45,21 @@ from metrics import Metrics
 metrics = Metrics()
 from plotter import Plotter
 
-## ── Load data ────────────────────────────────────────────────────────────────
+# Load data
 df = pd.read_csv("Data/Factors.csv", parse_dates=["Date"])
 
 HOLDOUT_START = "2022-01-01"
 
+# Identify Y columns and features
 Y_COLS   = [c for c in df.columns if c.startswith("Y ")]
 NON_FEAT = {"Date"} | set(Y_COLS)
 ALL_FEAT = [c for c in df.columns if c not in NON_FEAT]
 
+# Create folder to store results
 RESULTS_DIR = "Results/Lasso"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
-## ── Horizon config ───────────────────────────────────────────────────────────
+# Same structure as OLS to get results comparison with CatBoost for CV splits, as well as final holdout period
 HORIZON_CONFIG = {
     "0w":  {"purge_weeks":  0, "n_folds": 10},
     "1w":  {"purge_weeks":  1, "n_folds": 10},
@@ -69,10 +70,10 @@ HORIZON_CONFIG = {
     "12m": {"purge_weeks": 52, "n_folds":  4},
 }
 
-## ── LassoCV settings ─────────────────────────────────────────────────────────
-#  Alpha grid: 100 log-spaced values from 1e-4 to 1e1.
-#  TimeSeriesSplit(5) respects temporal order within the training window so
-#  future training observations are never used to select alpha.
+# Lasso settings 
+# TimeSeriesSplit(5) respects temporal order within the training window so
+# future training observations are never used to select alpha
+# Note: Setings can be adjusted if seen fit
 ALPHAS      = np.logspace(-4, 1, 100)
 INNER_CV    = TimeSeriesSplit(n_splits=5)
 MAX_ITER    = 10_000
@@ -81,7 +82,7 @@ def parse_horizon(target):
     m = re.search(r"Y (\d+(?:w|m)) ", target)
     return m.group(1) if m else "0w"
 
-# Purged k-fold CV (Prado et al. 2018)
+# Purged k-fold CV
 def purged_cv(data, target, features, purge_weeks, n_folds):
     n         = len(data)
     fold_size = n // n_folds
@@ -106,8 +107,6 @@ def purged_cv(data, target, features, purge_weeks, n_folds):
         X_te = test[features].values
 
         # Drop columns that are all-NaN in this train window
-        # Impute remaining NaN with column training mean so that after StandardScaler
-        # missing values map to 0 (the scaled mean) — neutral, no spurious signal
         valid_cols  = ~np.all(np.isnan(X_tr), axis=0)
         X_tr        = X_tr[:, valid_cols]
         X_te        = X_te[:, valid_cols]
@@ -134,7 +133,7 @@ def purged_cv(data, target, features, purge_weeks, n_folds):
 
     return results
 
-## ── Run per Y horizon ────────────────────────────────────────────────────────
+#Run model for all horizons
 summary = []
 
 for target in Y_COLS:
@@ -154,7 +153,7 @@ for target in Y_COLS:
     label = f"{target}  [NOWCAST]" if is_nowcast else target
     print(f"\n{label}  (horizon={horizon}, purge={purge_wks}w, folds={n_folds})")
 
-    ## ── Purged CV ────────────────────────────────────────────────────────────
+    # Performance evaluation on Purged CV splits
     fold_results = purged_cv(cv_data, target, ALL_FEAT, purge_wks, n_folds)
 
     if fold_results:
@@ -169,18 +168,18 @@ for target in Y_COLS:
         cv_r2      = metrics.r2(cv_actuals, cv_preds)
         cv_hitrate = metrics.hit_rate(cv_actuals, cv_preds)
 
-        print(f"  CV       RMSE={cv_rmse:.4f}  RW_RMSE={cv_rw_rmse:.4f}  "
+        print(f"CV RMSE={cv_rmse:.4f}  RW_RMSE={cv_rw_rmse:.4f}  "
               f"R²={cv_r2:.4f}  Hit={cv_hitrate:.1%}  "
               f"(n_obs={len(cv_actuals)}, folds={len(fold_results)})")
-        print(f"           alpha range [{min(cv_alphas):.5f}, {max(cv_alphas):.5f}]  "
+        print(f"alpha range [{min(cv_alphas):.5f}, {max(cv_alphas):.5f}]  "
               f"nonzero coefs {min(cv_nonzeros)}–{max(cv_nonzeros)}")
     else:
         cv_rmse = cv_rw_rmse = cv_r2 = cv_hitrate = None
         cv_preds = cv_actuals = cv_dates = []
         cv_alphas = cv_nonzeros = []
-        print("  CV       insufficient data for all folds")
+        print("CV: insufficient data for all folds")
 
-    ## ── Final model — trained on full CV period ──────────────────────────────
+    # Final lasso on full training set
     X_cv = cv_data[ALL_FEAT].values
     y_cv = cv_data[target].values
 
@@ -200,6 +199,7 @@ for target in Y_COLS:
     final_model = LassoCV(alphas=ALPHAS, cv=INNER_CV, max_iter=MAX_ITER)
     final_model.fit(X_cv_sc, y_cv)
 
+    # Holdout period performance
     hold_preds   = final_model.predict(X_hold_sc)
     hold_actuals = hold_data[target].values
     hold_rmse    = metrics.rmse(hold_actuals, hold_preds)
@@ -211,10 +211,10 @@ for target in Y_COLS:
     n_nonzero_final = int(np.sum(final_model.coef_ != 0))
     best_alpha      = final_model.alpha_
 
-    print(f"  Holdout  RMSE={hold_rmse:.4f}  RW_RMSE={hold_rw_rmse:.4f}  "
+    print(f"Holdout RMSE={hold_rmse:.4f}  RW_RMSE={hold_rw_rmse:.4f}  "
           f"R²={hold_r2:.4f}  Hit={hold_hitrate:.1%}  "
           f"DM={dm_stat:.2f}  p={dm_p:.3f}")
-    print(f"           alpha={best_alpha:.5f}  nonzero={n_nonzero_final}/{len(final_model.coef_)}")
+    print(f"alpha={best_alpha:.5f}  nonzero={n_nonzero_final}/{len(final_model.coef_)}")
 
     summary.append({
         "Y":              target,
@@ -237,14 +237,14 @@ for target in Y_COLS:
         "n_holdout":      len(hold_data),
     })
 
-    ## ── Coefficient plot (non-zero only) ─────────────────────────────────────
+    # Plot (non-zero only)
     feat_names   = np.array(ALL_FEAT)[valid_cols_final]
     coef_series  = pd.Series(final_model.coef_, index=feat_names)
     nonzero_coef = coef_series[coef_series != 0].sort_values()
 
     n_axes = 3 if len(cv_preds) > 0 else 2
     fig, axes = plt.subplots(n_axes, 1, figsize=(14, 5 * n_axes), facecolor="white")
-    fig.suptitle(f"{target}{' [NOWCAST]' if is_nowcast else ''}",
+    fig.suptitle(f"{target}{'[NOWCAST]' if is_nowcast else ''}",
                  fontsize=13, fontweight="bold")
 
     ax_idx = 0
@@ -252,7 +252,7 @@ for target in Y_COLS:
         axes[ax_idx].plot(cv_dates, cv_actuals, label="Actual",    color=_DARK, lw=1.5, alpha=0.85)
         axes[ax_idx].plot(cv_dates, cv_preds,   label="Predicted", color=_BLUE, lw=1.2, alpha=0.85)
         axes[ax_idx].axhline(0, color=_GREY, lw=0.8, ls="--")
-        axes[ax_idx].set_title(f"Purged CV  —  RMSE={cv_rmse:.4f}  |  RW={cv_rw_rmse:.4f}  |  R²={cv_r2:.4f}",
+        axes[ax_idx].set_title(f"Purged CV — RMSE={cv_rmse:.4f} | RW={cv_rw_rmse:.4f} | R²={cv_r2:.4f}",
                                fontsize=10)
         axes[ax_idx].legend(frameon=False, fontsize=9)
         _style_ax(axes[ax_idx], ylabel="∆ Price (NOK/kg)")
@@ -261,8 +261,8 @@ for target in Y_COLS:
     axes[ax_idx].plot(hold_data["Date"].values, hold_actuals, label="Actual",    color=_DARK, lw=1.5, alpha=0.85)
     axes[ax_idx].plot(hold_data["Date"].values, hold_preds,   label="Predicted", color=_BLUE, lw=1.2, alpha=0.85)
     axes[ax_idx].axhline(0, color=_GREY, lw=0.8, ls="--", label="Random Walk")
-    axes[ax_idx].set_title(f"Holdout 2022–2025  —  RMSE={hold_rmse:.4f}  |  RW={hold_rw_rmse:.4f}  |  "
-                           f"R²={hold_r2:.4f}  |  DM p={dm_p:.3f}  |  α={best_alpha:.5f}", fontsize=10)
+    axes[ax_idx].set_title(f"Holdout 2022–2025 — RMSE={hold_rmse:.4f}  |  RW={hold_rw_rmse:.4f}  |  "
+                           f"R²={hold_r2:.4f} | DM p={dm_p:.3f} | α={best_alpha:.5f}", fontsize=10)
     axes[ax_idx].legend(frameon=False, fontsize=9)
     _style_ax(axes[ax_idx], ylabel="∆ Price (NOK/kg)")
     ax_idx += 1
@@ -288,13 +288,13 @@ for target in Y_COLS:
     plt.savefig(f"{RESULTS_DIR}/lasso_{safe_name}.pdf", format="pdf", bbox_inches="tight")
     plt.close()
 
-## ── Summary table ────────────────────────────────────────────────────────────
-print("\n── Summary ──────────────────────────────────────────────────────────")
+# Summary table
+print("\n Summary of Lasso results")
 summary_df = pd.DataFrame(summary).set_index("Y")
 print(summary_df.to_string())
 summary_df.to_csv(f"{RESULTS_DIR}/lasso_summary.csv")
 
-## ── PDF results table ────────────────────────────────────────────────────────
+# PDF results table
 disp = pd.DataFrame({
     "Horizon":    [r["Horizon"] for r in summary],
     "CV RMSE":    [metrics.fmt(r["CV RMSE"]) for r in summary],
@@ -314,7 +314,7 @@ disp = pd.DataFrame({
 
 Plotter().results_table(
     disp,
-    "Lasso — Results Summary\nHoldout: 2022–2025  |  Purged Walk-Forward CV  |  LassoCV (TimeSeriesSplit)",
+    "Lasso — Results Summary\nHoldout: 2022–2025 | Purged CV | LassoCV",
     f"{RESULTS_DIR}/lasso_results.pdf",
     width=18,
 )

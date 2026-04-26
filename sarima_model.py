@@ -57,7 +57,7 @@ df = pd.read_csv("Data/Factors.csv", parse_dates=["Date"])
 # Identify Y columns
 Y_COLS = [c for c in df.columns if c.startswith("Y ")]
 
-# Same structure as OLS for comparison
+# Same structure as OLS to get results comparison with CatBoost for CV splits, as well as final holdout period
 # steps = number of consecutive weekly log-returns summed in the target
 HORIZON_CONFIG = {
     "0w":  {"purge_weeks":  0, "n_folds": 10, "steps":  1},

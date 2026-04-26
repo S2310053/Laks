@@ -1,18 +1,10 @@
+# This module is made for model comparison 
+
 ##
-#  Model comparison — reads saved results from individual model scripts
-#
-#  Reads:  Results/CatBoost/catboost_summary.csv
-#          Results/Lasso/lasso_summary.csv
-#          Results/SARIMA/sarima_summary.csv
-#          Results/OLS/ols_summary.csv
-#
-#  Produces:
-#    - Combined results table (PDF)
-#    - Comparison bar charts per metric (PDF)
-#    - Skill scores vs Random Walk (PDF)
-#
-#  Run this AFTER running the individual model scripts.
-#  No models are re-estimated here — only saved results are compared.
+# All other scripts must be run first to generate the necessary results files in the Results/ folder
+# This script only reads those saved results and compares them — it does not re-estimate any models
+# That way models can be run independently, and this comparison can be run quickly after all models have been estimated
+# Because some of the models can take a bit of time to run
 ##
 
 import pandas as pd
@@ -24,10 +16,11 @@ import matplotlib.pyplot as plt
 from metrics import Metrics
 from plotter import Plotter
 
+# Create folder to store results
 RESULTS_DIR = "Results/Comparison"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
-## ── Load saved results ──────────────────────────────────────────────────────
+# Load saved results (each model needs to be run first to generate these)
 MODELS = {
     "CatBoost": "Results/CatBoost/catboost_summary.csv",
     "Lasso":    "Results/Lasso/lasso_summary.csv",
@@ -39,9 +32,7 @@ loaded = {}
 for name, path in MODELS.items():
     if os.path.exists(path):
         df = pd.read_csv(path)
-        # Normalise horizon column
         if "Horizon" not in df.columns and "Y" in df.columns:
-            # OLS may not have Horizon column — derive from Y
             import re
             df["Horizon"] = df["Y"].apply(
                 lambda x: re.search(r"Y (\d+\w)", x).group(1) if re.search(r"Y (\d+\w)", x) else "?")
@@ -51,14 +42,14 @@ for name, path in MODELS.items():
         print(f"  ✗ {name:<10} NOT FOUND — run {name.lower()}_model.py first")
 
 if len(loaded) == 0:
-    print("\nNo results found. Run individual model scripts first.")
+    print("\nNo results found. Run individual model scripts first")
     exit()
 
-## ── Define horizon order ────────────────────────────────────────────────────
+# Define horizon order 
 HORIZON_ORDER = ["0w", "1w", "2w", "1m", "3m", "6m", "12m"]
 
-## ── Build comparison table ──────────────────────────────────────────────────
-#  For each horizon × model, extract: Hold R², Hold Hit, Skill vs RW, DM p
+# Build comparison table
+# For each horizon of each model it extracts the following: Hold R², Hold Hit, Skill vs RW, DM p
 rows = []
 for hz in HORIZON_ORDER:
     row = {"Horizon": hz}
@@ -86,11 +77,11 @@ for hz in HORIZON_ORDER:
     rows.append(row)
 
 comp_df = pd.DataFrame(rows)
-print("\n── Comparison Table (Holdout) ──────────────────────────────────────")
+print("\nComparison Table (Holdout period)")
 print(comp_df.to_string(index=False))
 comp_df.to_csv(f"{RESULTS_DIR}/comparison_summary.csv", index=False)
 
-## ── PDF: Combined results table ─────────────────────────────────────────────
+# PDF with combined results table 
 def _fmt_pct(x):
     if pd.isna(x) or x is None:
         return "—"
@@ -101,14 +92,9 @@ def _fmt_skill(x):
         return "—"
     return f"{x:+.1f}%"
 
-def _fmt_p(x):
-    if pd.isna(x) or x is None:
-        return "—"
-    return f"{x:.3f}" if x >= 0.001 else "< 0.001"
-
 model_names = list(loaded.keys())
 
-# Build display table — R² and Hit for each model
+# Build display table for R² and Hit for each model
 disp_cols = ["Horizon"]
 disp_data = {"Horizon": [r["Horizon"] for r in rows]}
 
@@ -127,7 +113,7 @@ Plotter().results_table(
 )
 print()
 
-## ── Bar chart: Holdout R² by horizon ────────────────────────────────────────
+# Bar chart: Holdout R² by horizon 
 fig, axes = plt.subplots(3, 1, figsize=(14, 16))
 fig.suptitle("Model Comparison — Holdout 2022–2025", fontsize=14, fontweight="bold")
 
@@ -196,8 +182,8 @@ plt.savefig(f"{RESULTS_DIR}/comparison_charts.pdf", format="pdf", bbox_inches="t
 plt.close()
 print(f"PDF saved → {RESULTS_DIR}/comparison_charts.pdf")
 
-## ── Detailed table: per-horizon winner ──────────────────────────────────────
-print("\n── Best Model per Horizon (Holdout R²) ─────────────────────────────")
+# Detailed table: Best model per horizon
+print("\n── Best Model per Horizon (Holdout R²)")
 for hz in HORIZON_ORDER:
     best_name = "—"
     best_r2   = -np.inf
