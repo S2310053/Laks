@@ -14,6 +14,7 @@ import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 from metrics import Metrics
+metrics = Metrics()
 from plotter import Plotter
 
 # Create folder to store results
@@ -68,7 +69,7 @@ for hz in HORIZON_ORDER:
         rw_rmse   = r.get("Hold RW RMSE", None)
         dm_p      = r.get("Hold DM p", None)
 
-        skill = Metrics.skill_score(hold_rmse, rw_rmse) if pd.notna(hold_rmse) and pd.notna(rw_rmse) else None
+        skill = metrics.skill_score(hold_rmse, rw_rmse) if pd.notna(hold_rmse) and pd.notna(rw_rmse) else None
 
         row[f"{name} R²"]    = hold_r2
         row[f"{name} Hit"]   = hold_hit
@@ -99,7 +100,7 @@ disp_cols = ["Horizon"]
 disp_data = {"Horizon": [r["Horizon"] for r in rows]}
 
 for name in model_names:
-    disp_data[f"{name} R²"]    = [Metrics.fmt(r.get(f"{name} R²"), ".3f") for r in rows]
+    disp_data[f"{name} R²"]    = [metrics.fmt(r.get(f"{name} R²"), ".3f") for r in rows]
     disp_data[f"{name} Hit"]   = [_fmt_pct(r.get(f"{name} Hit")) for r in rows]
     disp_data[f"{name} Skill"] = [_fmt_skill(r.get(f"{name} Skill")) for r in rows]
 
