@@ -57,7 +57,7 @@ HORIZONS = {
     "Y 1m ∆ Salmon (NOK/KG)":  {"purge_weeks":  4, "n_folds": 10, "fwd": "FWD 1m",  "horizon": "1m"},
     "Y 3m ∆ Salmon (NOK/KG)":  {"purge_weeks": 13, "n_folds":  8, "fwd": "FWD 3m",  "horizon": "3m"},
     "Y 6m ∆ Salmon (NOK/KG)":  {"purge_weeks": 26, "n_folds":  6, "fwd": "FWD 6m",  "horizon": "6m"},
-    "Y 12m ∆ Salmon (NOK/KG)": {"purge_weeks": 52, "n_folds":  4, "fwd": "FWD 12m", "horizon": "12m"},
+    "Y 12m ∆ Salmon (NOK/KG)": {"purge_weeks": 52, "n_folds":  3, "fwd": "FWD 12m", "horizon": "12m"},
 }
 
 # Purged k-fold CV

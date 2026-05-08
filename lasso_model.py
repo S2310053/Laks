@@ -67,7 +67,7 @@ HORIZON_CONFIG = {
     "1m":  {"purge_weeks":  4, "n_folds": 10},
     "3m":  {"purge_weeks": 13, "n_folds":  8},
     "6m":  {"purge_weeks": 26, "n_folds":  6},
-    "12m": {"purge_weeks": 52, "n_folds":  4},
+    "12m": {"purge_weeks": 52, "n_folds":  3},
 }
 
 # Lasso settings 
