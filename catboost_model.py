@@ -163,10 +163,11 @@ for target in Y_COLS:
     is_nowcast = (horizon == "0w") # Labelled nowcast, since we are estimating current week returns and not future returns
     label = f"{target} [NOWCAST]" if is_nowcast else target
 
-    # Embargo: end training purge_wks before holdout so no training target overlaps holdout returns
-    embargo_date = pd.Timestamp(HOLDOUT_START) - pd.Timedelta(weeks=purge_wks)
-    cv_data   = df[df["Date"] < embargo_date].dropna(subset=[target]).copy().reset_index(drop=True)
+    cv_data   = df[df["Date"] < HOLDOUT_START].dropna(subset=[target]).copy().reset_index(drop=True)
     hold_data = df[df["Date"] >= HOLDOUT_START].dropna(subset=[target]).copy().reset_index(drop=True)
+
+    # Embargo: final model training ends purge_wks before holdout so no training target overlaps holdout returns
+    embargo_date = pd.Timestamp(HOLDOUT_START) - pd.Timedelta(weeks=purge_wks)
 
     if len(cv_data) < 100 or len(hold_data) == 0:
         print(f"[SKIP] {target}")
@@ -196,10 +197,11 @@ for target in Y_COLS:
         cv_preds, cv_actuals, cv_dates = [], [], []
         print("CV: insufficient data for all folds")
 
-    # Final model trained on all training data, evaluated on holdout
-    val_size_final = max(int(len(cv_data) * VAL_FRAC), 10)
-    cv_train_final = cv_data.iloc[:-val_size_final]
-    cv_val_final   = cv_data.iloc[-val_size_final:]
+    # Final model trained on embargoed training data (no target overlap with holdout)
+    train_final    = cv_data[cv_data["Date"] < embargo_date].copy()
+    val_size_final = max(int(len(train_final) * VAL_FRAC), 10)
+    cv_train_final = train_final.iloc[:-val_size_final]
+    cv_val_final   = train_final.iloc[-val_size_final:]
 
     final_model = CatBoostRegressor(**CB_BASE, depth=depth)
     final_model.fit(

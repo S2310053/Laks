@@ -145,10 +145,11 @@ for target in Y_COLS:
     n_folds    = cfg["n_folds"]
     is_nowcast = (horizon == "0w")
 
-    # Embargo: end training purge_wks before holdout so no training target overlaps holdout returns
-    embargo_date = pd.Timestamp(HOLDOUT_START) - pd.Timedelta(weeks=purge_wks)
-    cv_data   = df[df["Date"] < embargo_date].dropna(subset=[target]).copy().reset_index(drop=True)
+    cv_data   = df[df["Date"] < HOLDOUT_START].dropna(subset=[target]).copy().reset_index(drop=True)
     hold_data = df[df["Date"] >= HOLDOUT_START].dropna(subset=[target]).copy().reset_index(drop=True)
+
+    # Embargo: final model training ends purge_wks before holdout so no training target overlaps holdout returns
+    embargo_date = pd.Timestamp(HOLDOUT_START) - pd.Timedelta(weeks=purge_wks)
 
     if len(cv_data) < 100 or len(hold_data) == 0:
         print(f"[SKIP] {target}")
@@ -183,9 +184,10 @@ for target in Y_COLS:
         cv_alphas = cv_nonzeros = []
         print("CV: insufficient data for all folds")
 
-    # Final lasso on full training set
-    X_cv = cv_data[ALL_FEAT].values
-    y_cv = cv_data[target].values
+    # Final lasso on embargoed training set (no target overlap with holdout)
+    train_final = cv_data[cv_data["Date"] < embargo_date].copy()
+    X_cv = train_final[ALL_FEAT].values
+    y_cv = train_final[target].values
 
     valid_cols_final  = ~np.all(np.isnan(X_cv), axis=0)
     X_cv_v            = X_cv[:, valid_cols_final]

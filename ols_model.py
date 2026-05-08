@@ -110,10 +110,11 @@ for target, cfg in HORIZONS.items():
         print(f"[SKIP] {target} — {fwd_feat} not in data")
         continue
 
-    # Embargo: end training purge_wks before holdout so no training target overlaps holdout returns
-    embargo_date = pd.Timestamp(HOLDOUT_START) - pd.Timedelta(weeks=purge_wks)
-    cv_data   = df[df["Date"] < embargo_date].dropna(subset=[target, fwd_feat]).copy().reset_index(drop=True)
+    cv_data   = df[df["Date"] < HOLDOUT_START].dropna(subset=[target, fwd_feat]).copy().reset_index(drop=True)
     hold_data = df[df["Date"] >= HOLDOUT_START].dropna(subset=[target, fwd_feat]).copy().reset_index(drop=True)
+
+    # Embargo: final model training ends purge_wks before holdout so no training target overlaps holdout returns
+    embargo_date = pd.Timestamp(HOLDOUT_START) - pd.Timedelta(weeks=purge_wks)
 
     if len(cv_data) < 100 or len(hold_data) == 0:
         print(f"[SKIP] {target}")
@@ -140,9 +141,10 @@ for target, cfg in HORIZONS.items():
         cv_preds = cv_actuals = cv_dates = []
         print("CV: insufficient data")
 
-    # Final OLS on full training set
-    X_cv = sm.add_constant(cv_data[fwd_feat].values)
-    ols  = sm.OLS(cv_data[target].values, X_cv).fit(
+    # Final OLS on embargoed training set (no target overlap with holdout)
+    train_final = cv_data[cv_data["Date"] < embargo_date].copy()
+    X_cv = sm.add_constant(train_final[fwd_feat].values)
+    ols  = sm.OLS(train_final[target].values, X_cv).fit(
                cov_type='HAC', cov_kwds={'maxlags': purge_wks})
 
     alpha_hat = ols.params[0]
