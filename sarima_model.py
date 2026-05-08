@@ -164,7 +164,9 @@ for target in Y_COLS:
     steps      = cfg["steps"]
     is_nowcast = (horizon == "0w")
 
-    cv_data   = df[df["Date"] < HOLDOUT_START].dropna(subset=[target]).copy().reset_index(drop=True)
+    # Embargo: end training purge_wks before holdout so no training target overlaps holdout returns
+    embargo_date = pd.Timestamp(HOLDOUT_START) - pd.Timedelta(weeks=purge_wks)
+    cv_data   = df[df["Date"] < embargo_date].dropna(subset=[target]).copy().reset_index(drop=True)
     hold_data = df[df["Date"] >= HOLDOUT_START].dropna(subset=[target]).copy().reset_index(drop=True)
 
     if len(cv_data) < 100 or len(hold_data) == 0:
@@ -202,7 +204,7 @@ for target in Y_COLS:
     t0 = time.time()
 
     weekly_ret_full = (
-        df[df["Date"] < HOLDOUT_START][WEEKLY_RET_COL]
+        df[df["Date"] < embargo_date][WEEKLY_RET_COL]
         .dropna()
         .reset_index(drop=True)
     )

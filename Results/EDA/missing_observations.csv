@@ -1,20 +1,20 @@
 Feature,pct_NaN
-∆ Pig Price (EU) 12m,44.696969696969695
-∆ Pig Price (EU) 6m,42.234848484848484
-∆ Pig Price (EU) 3m,41.003787878787875
-∆ Pig Price (EU) 1m,40.15151515151515
-∆ Pig Price (EU) 2w,39.96212121212121
-∆ Pig Price (EU) 1w,39.86742424242424
-∆ Pig Price (EU),39.77272727272727
-∆ Broiler Price (EU) 12m,35.03787878787879
+∆ Pig Price (EU) 12m,44.50757575757576
+∆ Pig Price (EU) 6m,42.04545454545455
+∆ Pig Price (EU) 3m,40.81439393939394
+∆ Pig Price (EU) 1m,39.96212121212121
+∆ Pig Price (EU) 2w,39.77272727272727
+∆ Pig Price (EU) 1w,39.678030303030305
+∆ Pig Price (EU),39.58333333333333
+∆ Broiler Price (EU) 12m,34.56439393939394
 Sea Temp 12m Avg,34.46969696969697
-∆ Broiler Price (EU) 6m,32.57575757575758
-∆ Broiler Price (EU) 3m,31.344696969696972
+∆ Broiler Price (EU) 6m,32.10227272727273
 Lice Outbreak 3m,30.87121212121212
-∆ Broiler Price (EU) 1m,30.492424242424242
-∆ Broiler Price (EU) 2w,30.303030303030305
-∆ Broiler Price (EU) 1w,30.208333333333332
+∆ Broiler Price (EU) 3m,30.87121212121212
 Lice Outbreak 1m,30.01893939393939
+∆ Broiler Price (EU) 1m,30.01893939393939
+∆ Broiler Price (EU) 2w,29.829545454545453
+∆ Broiler Price (EU) 1w,29.734848484848484
 Sea Temp,29.640151515151516
 Lice Outbreak,29.640151515151516
 ISA Outbreak 3m,23.484848484848484
@@ -32,49 +32,56 @@ Smolt Release 18m Monthly,2.746212121212121
 ∆ Salmon (NOK/KG) 6m,2.462121212121212
 ∆ FWD 3m,2.367424242424242
 Smolt Release 17m Monthly,2.367424242424242
-FWD 3m,2.178030303030303
 ∆ FWD 1m,2.178030303030303
+FWD 3m,2.178030303030303
 FWD 1m,2.083333333333333
 Smolt Release 16m Monthly,1.9886363636363635
 Smolt Release 15m Monthly,1.5151515151515151
 RVol 13w,1.231060606060606
 ∆ Salmon (NOK/KG) 3m,1.231060606060606
 Smolt Release 14m Monthly,1.1363636363636365
-Soybean FWD Slope,1.1363636363636365
-Soybean FWD Curvature,1.1363636363636365
+Soybean FWD Slope,0.8522727272727272
+Soybean FWD Curvature,0.8522727272727272
 Smolt Release 13m Monthly,0.6628787878787878
-∆YOY Total Biomass Monthly,0.5681818181818182
 YOY Avg Weight (KG) Monthly,0.5681818181818182
+∆YOY Total Biomass Monthly,0.5681818181818182
 RVol 4w,0.3787878787878788
 ∆ Salmon (NOK/KG) 1m,0.3787878787878788
 Smolt Release 12m Monthly,0.2840909090909091
-Brent FWD Curvature,0.2840909090909091
-Brent FWD Slope,0.2840909090909091
 ∆ Salmon (NOK/KG) 2w,0.1893939393939394
 ∆ Salmon (NOK/KG) 1w,0.0946969696969697
 ∆ Spread (FP - SSB),0.0946969696969697
-∆ Fishmeal 1m Monthly,0.0
-Meat CPI (EU) Monthly,0.0
-∆ Shrimp Price (Global) 12m Monthly,0.0
-Avg Weight (KG) Monthly,0.0
-∆ Fishmeal 12m Monthly,0.0
-∆ Total Biomass Monthly,0.0
-∆ Chilean Exports 3m,0.0
+Smolt Release 11m Monthly,0.0
+Brent FWD Slope,0.0
 ∆ Chilean Exports 1m,0.0
 ∆ Chilean Exports 2w,0.0
 ∆ Chilean Exports 1w,0.0
 ∆ Export Volume 1m,0.0
-∆ Fishmeal 6m Monthly,0.0
 ∆ Export Volume 2w,0.0
 ∆ Export Volume 1w,0.0
-∆ Shrimp Price (Global) 3m Monthly,0.0
-Spread (FP - SSB),0.0
+Meat CPI (EU) Monthly,0.0
+∆ Fishmeal 1m Monthly,0.0
 ∆ Fishmeal 3m Monthly,0.0
-∆ Shrimp Price (Global) 6m Monthly,0.0
-Smolt Release 9m Monthly,0.0
-∆ Shrimp Price (Global) 1m Monthly,0.0
+∆ Fishmeal 6m Monthly,0.0
+∆ Fishmeal 12m Monthly,0.0
+Brent FWD Curvature,0.0
+∆ Total Biomass Monthly,0.0
+Spread (FP - SSB),0.0
+Month_01,0.0
+Month_02,0.0
+Month_03,0.0
+Month_04,0.0
+Month_05,0.0
+Month_06,0.0
+Month_07,0.0
+Month_08,0.0
+Month_09,0.0
+Month_10,0.0
+∆ Chilean Exports 3m,0.0
+Avg Weight (KG) Monthly,0.0
 Smolt Release 10m Monthly,0.0
-Smolt Release 11m Monthly,0.0
+Harvest Intensity 1m Monthly,0.0
+Smolt Release 9m Monthly,0.0
 Smolt Release 8m Monthly,0.0
 Smolt Release 7m Monthly,0.0
 Smolt Release 6m Monthly,0.0
@@ -83,10 +90,6 @@ Smolt Release 4m Monthly,0.0
 Smolt Release 3m Monthly,0.0
 Smolt Release 2m Monthly,0.0
 Loss Rate 6m Monthly,0.0
-Loss Rate 3m Monthly,0.0
-Loss Rate 1m Monthly,0.0
-Harvest Intensity 3m Monthly,0.0
-Harvest Intensity 1m Monthly,0.0
 ∆ EURNOK,0.0
 ∆ EURNOK 1w,0.0
 ∆ EURNOK 2w,0.0
@@ -96,3 +99,11 @@ Harvest Intensity 1m Monthly,0.0
 ∆ EURNOK 12m,0.0
 CPI NO Monthly,0.0
 NIBOR 3m,0.0
+∆ Shrimp Price (Global) 1m Monthly,0.0
+∆ Shrimp Price (Global) 3m Monthly,0.0
+∆ Shrimp Price (Global) 6m Monthly,0.0
+∆ Shrimp Price (Global) 12m Monthly,0.0
+Loss Rate 3m Monthly,0.0
+Loss Rate 1m Monthly,0.0
+Harvest Intensity 3m Monthly,0.0
+Month_11,0.0

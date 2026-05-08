@@ -542,6 +542,12 @@ class FeatureEngineer:
             if all(c in df.columns for c in [c1, c6, c12]):
                 out[f"{label} FWD Curvature"] = _ln(df[c1]) - 2 * _ln(df[c6]) + _ln(df[c12])
 
+        # Monthly dummies (Dec as reference category, omitted to avoid multicollinearity)
+        # Binary columns allow CatBoost to isolate month-specific seasonal effects with clean splits
+        _month = pd.to_datetime(df["Date"]).dt.month
+        for m in range(1, 12):  # Jan=1 … Nov=11, Dec omitted
+            out[f"Month_{m:02d}"] = (_month == m).astype(int)
+
         out = out.sort_values("Date").reset_index(drop=True)
 
         # Build freq_map from column naming convention

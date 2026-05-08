@@ -138,12 +138,16 @@ summary = []
 
 for target in Y_COLS:
     horizon    = parse_horizon(target)
-    cfg        = HORIZON_CONFIG.get(horizon, {"purge_weeks": 0, "n_folds": 10})
+    cfg        = HORIZON_CONFIG.get(horizon)
+    if cfg is None:
+        continue
     purge_wks  = cfg["purge_weeks"]
     n_folds    = cfg["n_folds"]
     is_nowcast = (horizon == "0w")
 
-    cv_data   = df[df["Date"] < HOLDOUT_START].dropna(subset=[target]).copy().reset_index(drop=True)
+    # Embargo: end training purge_wks before holdout so no training target overlaps holdout returns
+    embargo_date = pd.Timestamp(HOLDOUT_START) - pd.Timedelta(weeks=purge_wks)
+    cv_data   = df[df["Date"] < embargo_date].dropna(subset=[target]).copy().reset_index(drop=True)
     hold_data = df[df["Date"] >= HOLDOUT_START].dropna(subset=[target]).copy().reset_index(drop=True)
 
     if len(cv_data) < 100 or len(hold_data) == 0:

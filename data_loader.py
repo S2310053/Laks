@@ -40,7 +40,7 @@ class DataLoader:
     COMMODITY_BRENT        = _commodity + "Price_Brent.xlsx"
     COMMODITY_SOYBEAN      = _commodity + "Price_Soybean.xlsx"
     COMMODITY_FISHMEAL     = _commodity + "Price_Fishmeal.xlsx"
-    SALMON_FORWARD_OLD     = _salmon + _salmonMarket + "Forwardprices_20062024.csv"
+    SALMON_FORWARD_FULL    = _salmon + _salmonMarket + "Forwardprices_full.csv"
     SALMON_FORWARD_NEW     = _salmon + _salmonMarket + "Forwardprices_20252026.csv"
     SALMON_NIBOR           = _salmon + _salmonMarket + "NIBOR.xlsx"
     SALMON_CHILE_EXPORTS   = _salmon + _salmonMarket + "Exports_Chile.xlsx"
@@ -754,13 +754,13 @@ class DataLoader:
         _eurnok["Date"] = pd.to_datetime(_eurnok["Date"])
         _eurnok = _eurnok.sort_values("Date").rename(columns={"Last Price": "EURNOK"})
 
-        # Old file (2006–Sep 2024), with values already in NOK/kg
-        _dfOld = pd.read_csv(self.SALMON_FORWARD_OLD,
-                             sep=";", skiprows=1, decimal=",", index_col=False)
-        _dfOld = _dfOld.dropna(axis=1, how="all")
-        _oldResult = _extractHorizons(_dfOld, "NOK Value")
+        # Full file (2006–Jan 2025), with values already in NOK/kg
+        _dfFull = pd.read_csv(self.SALMON_FORWARD_FULL,
+                              sep=";", skiprows=1, decimal=",", index_col=False)
+        _dfFull = _dfFull.dropna(axis=1, how="all")
+        _fullResult = _extractHorizons(_dfFull, "NOK Value")
 
-        # New file (Sep 2024–Mar 2026), with values in EUR/tonne, converted to NOK/kg
+        # New file (Sep 2024–Apr 2026), with values in EUR/tonne, converted to NOK/kg
         _dfNew = pd.read_csv(self.SALMON_FORWARD_NEW,
                              sep=";", skiprows=1, decimal=",", index_col=False)
         _dfNew = _dfNew.dropna(axis=1, how="all")
@@ -777,16 +777,16 @@ class DataLoader:
         _dfNew["Value"] = _dfNew["Value"] * _dfNew["EURNOK"] / 1000
         _newResult = _extractHorizons(_dfNew, "Value")
 
-        # Combine the two datasets on ClosingDate, keeping all dates from both (Older file takes priority where both overlap)
+        # Combine the two datasets on ClosingDate, keeping all dates from both (Full file takes priority where both overlap)
         _fwdCols = [f"Salmon_Forward_{l}_Weekly" for l in ["M1", "M3", "M6", "M12"]]
 
-        dataDaily = pd.merge(_oldResult, _newResult,
+        dataDaily = pd.merge(_fullResult, _newResult,
                              on="ClosingDate", how="outer",
-                             suffixes=("_old", "_new"))
+                             suffixes=("_full", "_new"))
         dataDaily = dataDaily.sort_values("ClosingDate")
 
         for col in _fwdCols:
-            dataDaily[col] = dataDaily[f"{col}_old"].fillna(dataDaily[f"{col}_new"])
+            dataDaily[col] = dataDaily[f"{col}_full"].fillna(dataDaily[f"{col}_new"])
 
         dataDaily = dataDaily[["ClosingDate"] + _fwdCols]
 

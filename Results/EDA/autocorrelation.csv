@@ -61,7 +61,7 @@ Lice Outbreak 1m,0.0,0.0,0.0,0.0
 Lice Outbreak 3m,0.0,0.0,0.0,0.0
 Sea Temp,0.0,0.0,0.0,0.0
 Sea Temp 12m Avg,0.0,0.0,0.0,0.0
-∆ EURNOK,0.0641,0.0001,0.0009,0.0095
+∆ EURNOK,0.064,0.0001,0.001,0.01
 ∆ EURNOK 1w,0.0588,0.0001,0.0009,0.0092
 ∆ EURNOK 2w,0.0,0.0,0.0,0.0
 ∆ EURNOK 1m,0.0,0.0,0.0,0.0
@@ -74,13 +74,13 @@ NIBOR 3m,0.0,0.0,0.0,0.0
 ∆ Shrimp Price (Global) 3m Monthly,0.0,0.0,0.0,0.0
 ∆ Shrimp Price (Global) 6m Monthly,0.0,0.0,0.0,0.0
 ∆ Shrimp Price (Global) 12m Monthly,0.0,0.0,0.0,0.0
-∆ Broiler Price (EU) 1w,0.199,0.4158,0.4715,0.0373
+∆ Broiler Price (EU) 1w,0.0,0.0,0.0,0.0
 ∆ Broiler Price (EU) 2w,0.0,0.0,0.0,0.0
 ∆ Broiler Price (EU) 1m,0.0,0.0,0.0,0.0
 ∆ Broiler Price (EU) 3m,0.0,0.0,0.0,0.0
 ∆ Broiler Price (EU) 6m,0.0,0.0,0.0,0.0
 ∆ Broiler Price (EU) 12m,0.0,0.0,0.0,0.0
-∆ Pig Price (EU),0.0,0.0,0.0,0.0
+∆ Pig Price (EU),0.0,0.0031,0.0023,0.0002
 ∆ Pig Price (EU) 1w,0.0,0.0,0.0,0.0
 ∆ Pig Price (EU) 2w,0.0,0.0,0.0,0.0
 ∆ Pig Price (EU) 1m,0.0,0.0,0.0,0.0
@@ -96,3 +96,14 @@ Brent FWD Slope,0.0,0.0,0.0,0.0
 Brent FWD Curvature,0.0,0.0,0.0,0.0
 Soybean FWD Slope,0.0,0.0,0.0,0.0
 Soybean FWD Curvature,0.0,0.0,0.0,0.0
+Month_01,0.0,0.0,0.0,0.0
+Month_02,0.0,0.0,0.0,0.0
+Month_03,0.0,0.0,0.0,0.0
+Month_04,0.0,0.0,0.0,0.0
+Month_05,0.0,0.0,0.0,0.0
+Month_06,0.0,0.0,0.0,0.0
+Month_07,0.0,0.0,0.0,0.0
+Month_08,0.0,0.0,0.0,0.0
+Month_09,0.0,0.0,0.0,0.0
+Month_10,0.0,0.0,0.0,0.0
+Month_11,0.0,0.0,0.0,0.0

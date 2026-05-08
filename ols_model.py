@@ -110,7 +110,9 @@ for target, cfg in HORIZONS.items():
         print(f"[SKIP] {target} — {fwd_feat} not in data")
         continue
 
-    cv_data   = df[df["Date"] < HOLDOUT_START].dropna(subset=[target, fwd_feat]).copy().reset_index(drop=True)
+    # Embargo: end training purge_wks before holdout so no training target overlaps holdout returns
+    embargo_date = pd.Timestamp(HOLDOUT_START) - pd.Timedelta(weeks=purge_wks)
+    cv_data   = df[df["Date"] < embargo_date].dropna(subset=[target, fwd_feat]).copy().reset_index(drop=True)
     hold_data = df[df["Date"] >= HOLDOUT_START].dropna(subset=[target, fwd_feat]).copy().reset_index(drop=True)
 
     if len(cv_data) < 100 or len(hold_data) == 0:
