@@ -71,9 +71,7 @@ HORIZON_CONFIG = {
 }
 
 # Lasso settings 
-# TimeSeriesSplit(5) respects temporal order within the training window so
-# future training observations are never used to select alpha
-# Note: Setings can be adjusted if seen fit
+# Note: Base setings can be adjusted if seen fit
 ALPHAS      = np.logspace(-4, 1, 100)
 INNER_CV    = TimeSeriesSplit(n_splits=5)
 MAX_ITER    = 10_000
@@ -106,13 +104,10 @@ def purged_cv(data, target, features, purge_weeks, n_folds):
         y_tr = train[target].values
         X_te = test[features].values
 
-        # Drop columns that are all-NaN in this train window
-        valid_cols  = ~np.all(np.isnan(X_tr), axis=0)
+        # Drop columns that have any NaN in the training fold
+        valid_cols  = ~np.any(np.isnan(X_tr), axis=0)
         X_tr        = X_tr[:, valid_cols]
         X_te        = X_te[:, valid_cols]
-        col_means   = np.nanmean(X_tr, axis=0)
-        X_tr        = np.where(np.isnan(X_tr), col_means, X_tr)
-        X_te        = np.where(np.isnan(X_te), col_means, X_te)
 
         scaler = StandardScaler()
         X_tr   = scaler.fit_transform(X_tr)
@@ -171,6 +166,7 @@ for target in Y_COLS:
         cv_rmse    = metrics.rmse(cv_actuals, cv_preds)
         cv_rw_rmse = metrics.rw_rmse(cv_actuals)
         cv_r2      = metrics.r2(cv_actuals, cv_preds)
+        cv_rw_r2   = metrics.rw_r2(cv_actuals)
         cv_hitrate = metrics.hit_rate(cv_actuals, cv_preds)
 
         print(f"CV RMSE={cv_rmse:.4f}  RW_RMSE={cv_rw_rmse:.4f}  "
@@ -179,7 +175,7 @@ for target in Y_COLS:
         print(f"alpha range [{min(cv_alphas):.5f}, {max(cv_alphas):.5f}]  "
               f"nonzero coefs {min(cv_nonzeros)}–{max(cv_nonzeros)}")
     else:
-        cv_rmse = cv_rw_rmse = cv_r2 = cv_hitrate = None
+        cv_rmse = cv_rw_rmse = cv_r2 = cv_rw_r2 = cv_hitrate = None
         cv_preds = cv_actuals = cv_dates = []
         cv_alphas = cv_nonzeros = []
         print("CV: insufficient data for all folds")
@@ -205,12 +201,24 @@ for target in Y_COLS:
     final_model = LassoCV(alphas=ALPHAS, cv=INNER_CV, max_iter=MAX_ITER)
     final_model.fit(X_cv_sc, y_cv)
 
-    # Holdout period performance
-    hold_preds   = final_model.predict(X_hold_sc)
-    hold_actuals = hold_data[target].values
+    # Holdout period performance — drop rows where features have NaN
+    hold_preds_all   = final_model.predict(X_hold_sc)
+    hold_actuals_all = hold_data[target].values
+    hold_dates_all   = hold_data["Date"].values
+
+    # Mask: rows in holdout with no NaN across the valid feature columns
+    hold_valid_mask  = ~np.any(np.isnan(X_hold_v), axis=1)
+    hold_preds       = hold_preds_all[hold_valid_mask]
+    hold_actuals     = hold_actuals_all[hold_valid_mask]
+    hold_dates_clean = hold_dates_all[hold_valid_mask]
+
+    print(f"Holdout: {hold_valid_mask.sum()}/{len(hold_valid_mask)} rows used "
+          f"({(~hold_valid_mask).sum()} dropped due to NaN)")
+
     hold_rmse    = metrics.rmse(hold_actuals, hold_preds)
     hold_rw_rmse = metrics.rw_rmse(hold_actuals)
     hold_r2      = metrics.r2(hold_actuals, hold_preds)
+    hold_rw_r2   = metrics.rw_r2(hold_actuals)
     hold_hitrate = metrics.hit_rate(hold_actuals, hold_preds)
     dm_stat, dm_p = metrics.diebold_mariano(hold_actuals, hold_preds, horizon=max(purge_wks, 1))
 
@@ -218,8 +226,15 @@ for target in Y_COLS:
     best_alpha      = final_model.alpha_
 
     print(f"Holdout RMSE={hold_rmse:.4f}  RW_RMSE={hold_rw_rmse:.4f}  "
-          f"R²={hold_r2:.4f}  Hit={hold_hitrate:.1%}  "
+          f"R²={hold_r2:.4f}  RW_R²={hold_rw_r2:.4f}  Hit={hold_hitrate:.1%}  "
           f"DM={dm_stat:.2f}  p={dm_p:.3f}")
+
+    # Save holdout predictions for model comparison plots
+    pd.DataFrame({
+        "Date": hold_dates_clean,
+        "Actual": hold_actuals,
+        "Predicted": hold_preds,
+    }).to_csv(f"{RESULTS_DIR}/holdout_preds_{target.replace('/', '-').replace(' ', '_')}.csv", index=False)
     print(f"alpha={best_alpha:.5f}  nonzero={n_nonzero_final}/{len(final_model.coef_)}")
 
     summary.append({
@@ -229,10 +244,12 @@ for target in Y_COLS:
         "CV RMSE":        cv_rmse,
         "CV RW RMSE":     cv_rw_rmse,
         "CV R2":          cv_r2,
+        "CV RW R2":       cv_rw_r2,
         "CV Hit":         cv_hitrate,
         "Hold RMSE":      hold_rmse,
         "Hold RW RMSE":   hold_rw_rmse,
         "Hold R2":        hold_r2,
+        "Hold RW R2":     hold_rw_r2,
         "Hold Hit":       hold_hitrate,
         "Hold DM":        dm_stat,
         "Hold DM p":      dm_p,
@@ -240,7 +257,7 @@ for target in Y_COLS:
         "Nonzero Coefs":  n_nonzero_final,
         "Total Features": len(final_model.coef_),
         "n_train":        len(cv_data),
-        "n_holdout":      len(hold_data),
+        "n_holdout":      int(hold_valid_mask.sum()),
     })
 
     # Plot (non-zero only)
@@ -264,8 +281,8 @@ for target in Y_COLS:
         _style_ax(axes[ax_idx], ylabel="∆ Price (NOK/kg)")
         ax_idx += 1
 
-    axes[ax_idx].plot(hold_data["Date"].values, hold_actuals, label="Actual",    color=_DARK, lw=1.5, alpha=0.85)
-    axes[ax_idx].plot(hold_data["Date"].values, hold_preds,   label="Predicted", color=_BLUE, lw=1.2, alpha=0.85)
+    axes[ax_idx].plot(hold_dates_clean, hold_actuals, label="Actual",    color=_DARK, lw=1.5, alpha=0.85)
+    axes[ax_idx].plot(hold_dates_clean, hold_preds,   label="Predicted", color=_BLUE, lw=1.2, alpha=0.85)
     axes[ax_idx].axhline(0, color=_GREY, lw=0.8, ls="--", label="Random Walk")
     axes[ax_idx].set_title(f"Holdout 2022–2025 — RMSE={hold_rmse:.4f}  |  RW={hold_rw_rmse:.4f}  |  "
                            f"R²={hold_r2:.4f} | DM p={dm_p:.3f} | α={best_alpha:.5f}", fontsize=10)

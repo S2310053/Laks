@@ -21,6 +21,10 @@ class Metrics:
     def rw_rmse(self, actual):
         return np.sqrt(np.mean(actual ** 2))
 
+    # R² of baseline (Random walk predicts zero for log-return targets)
+    def rw_r2(self, actual):
+        return _sklearn_r2(actual, np.zeros_like(actual))
+
     # R² of model predictions vs actual values
     def r2(self, actual, pred):
         return _sklearn_r2(actual, pred)

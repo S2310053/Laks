@@ -210,7 +210,7 @@ class FeatureEngineer:
                     prev_val = np.nan
                     continue
                 if pd.isna(prev_val) or not np.isclose(v, prev_val):
-                    if not pd.isna(prev_val):          # skip the very first appearance
+                    if not pd.isna(prev_val):          
                         transitions.append((dates.iloc[i], v))
                 prev_val = v
 
@@ -223,7 +223,7 @@ class FeatureEngineer:
 
             # Back-calculate reference month end
             upper             = trans_date - pd.Timedelta(days=days_after)
-            month_end_upper   = upper + MonthEnd(0)   # end of upper's own month (≥ upper)
+            month_end_upper   = upper + MonthEnd(0)   
             if month_end_upper <= upper:
                 ref_month_end = month_end_upper
             else:
@@ -260,7 +260,7 @@ class FeatureEngineer:
         df   = data.copy()
         spot = df["Salmon_NOK_kg_FP_Weekly"]
 
-        # Log level — returns NaN where input is zero, negative, or missing
+        # For log levels, it returns NaN where input is zero, negative, or missing
         # As CATBoost natively handles NaNs, we would rather have NaN than a zero value (which is not actually zero, but just missing/invalid data)
         def _ln(s):
             s      = pd.to_numeric(s, errors="coerce")

@@ -299,7 +299,7 @@ class DataLoader:
         # Filter ILA only
         _ila = _data[_data["Sykdom"] == "ILA"].copy()
 
-        # Parse dates and handle errors by coercing to NaT
+        # Parse dates and handle errors by coercing to NaN
         _ila["Fra dato"] = pd.to_datetime(_ila["Fra dato"], errors="coerce")
         _ila["Til dato"] = pd.to_datetime(_ila["Til dato"], errors="coerce")
 

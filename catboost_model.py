@@ -188,12 +188,13 @@ for target in Y_COLS:
         cv_rmse    = metrics.rmse(cv_actuals, cv_preds)
         cv_rw_rmse = metrics.rw_rmse(cv_actuals)
         cv_r2      = metrics.r2(cv_actuals, cv_preds)
+        cv_rw_r2   = metrics.rw_r2(cv_actuals)
         cv_hitrate = metrics.hit_rate(cv_actuals, cv_preds)
         print(f"CV RMSE={cv_rmse:.4f}  RW_RMSE={cv_rw_rmse:.4f}  "
               f"R²={cv_r2:.4f}  Hit={cv_hitrate:.1%}  "
               f"(n_obs={len(cv_actuals)}, folds={len(fold_results)})")
     else:
-        cv_rmse, cv_rw_rmse, cv_r2, cv_hitrate = None, None, None, None
+        cv_rmse, cv_rw_rmse, cv_r2, cv_rw_r2, cv_hitrate = None, None, None, None, None
         cv_preds, cv_actuals, cv_dates = [], [], []
         print("CV: insufficient data for all folds")
 
@@ -215,13 +216,21 @@ for target in Y_COLS:
     hold_rmse     = metrics.rmse(hold_actuals, hold_preds)
     hold_rw_rmse  = metrics.rw_rmse(hold_actuals)
     hold_r2       = metrics.r2(hold_actuals, hold_preds)
+    hold_rw_r2    = metrics.rw_r2(hold_actuals)
     hold_hitrate  = metrics.hit_rate(hold_actuals, hold_preds)
     dm_stat, dm_p = metrics.diebold_mariano(hold_actuals, hold_preds, horizon=max(purge_wks, 1))
 
     # Print holdout results
     print(f"  Holdout  RMSE={hold_rmse:.4f}  RW_RMSE={hold_rw_rmse:.4f}  "
-          f"R²={hold_r2:.4f}  Hit={hold_hitrate:.1%}  "
+          f"R²={hold_r2:.4f}  RW_R²={hold_rw_r2:.4f}  Hit={hold_hitrate:.1%}  "
           f"DM={dm_stat:.2f}  p={dm_p:.3f}")
+
+    # Save holdout predictions for model comparison plots
+    pd.DataFrame({
+        "Date": hold_data["Date"].values,
+        "Actual": hold_actuals,
+        "Predicted": hold_preds,
+    }).to_csv(f"{RESULTS_DIR}/holdout_preds_{target.replace('/', '-').replace(' ', '_')}.csv", index=False)
 
     # Summary of results for per horizon
     summary.append({
@@ -231,10 +240,12 @@ for target in Y_COLS:
         "CV RMSE":       cv_rmse,
         "CV RW RMSE":    cv_rw_rmse,
         "CV R2":         cv_r2,
+        "CV RW R2":      cv_rw_r2,
         "CV Hit":        cv_hitrate,
         "Hold RMSE":     hold_rmse,
         "Hold RW RMSE":  hold_rw_rmse,
         "Hold R2":       hold_r2,
+        "Hold RW R2":    hold_rw_r2,
         "Hold Hit":      hold_hitrate,
         "Hold DM":       dm_stat,
         "Hold DM p":     dm_p,
