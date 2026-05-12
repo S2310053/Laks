@@ -52,28 +52,37 @@ if len(loaded) == 0:
 HORIZON_ORDER = ["0w", "1w", "2w", "1m", "3m", "6m", "12m"]
 
 # Build comparison table
-# For each horizon of each model it extracts: CV R², Hold R², Hold Hit, DM p
+# For each horizon of each model it extracts: CV R², Hold R², Hold RMSE, RW RMSE, Skill, Hit, DM p
 rows = []
 for hz in HORIZON_ORDER:
     row = {"Horizon": hz}
     for name, df in loaded.items():
         mask = df["Horizon"] == hz
         if mask.sum() == 0:
-            row[f"{name} CV R²"]  = None
-            row[f"{name} R²"]     = None
-            row[f"{name} Hit"]    = None
-            row[f"{name} DM p"]   = None
+            row[f"{name} CV R²"]    = None
+            row[f"{name} R²"]       = None
+            row[f"{name} RMSE"]     = None
+            row[f"{name} RW RMSE"]  = None
+            row[f"{name} Skill"]    = None
+            row[f"{name} Hit"]      = None
+            row[f"{name} DM p"]     = None
             continue
         r = df[mask].iloc[0]
-        cv_r2     = r.get("CV R2", r.get("CV R²", None))
-        hold_r2   = r.get("Hold R2", r.get("Hold R²", None))
-        hold_hit  = r.get("Hold Hit", None)
-        dm_p      = r.get("Hold DM p", None)
+        cv_r2     = r.get("CV R2",       r.get("CV R²",      None))
+        hold_r2   = r.get("Hold R2",     r.get("Hold R²",    None))
+        hold_rmse = r.get("Hold RMSE",   None)
+        rw_rmse   = r.get("Hold RW RMSE", None)
+        hold_hit  = r.get("Hold Hit",    None)
+        dm_p      = r.get("Hold DM p",   None)
+        skill     = metrics.skill_score(hold_rmse, rw_rmse)
 
-        row[f"{name} CV R²"]  = cv_r2
-        row[f"{name} R²"]     = hold_r2
-        row[f"{name} Hit"]    = hold_hit
-        row[f"{name} DM p"]   = dm_p
+        row[f"{name} CV R²"]    = cv_r2
+        row[f"{name} R²"]       = hold_r2
+        row[f"{name} RMSE"]     = hold_rmse
+        row[f"{name} RW RMSE"]  = rw_rmse
+        row[f"{name} Skill"]    = skill
+        row[f"{name} Hit"]      = hold_hit
+        row[f"{name} DM p"]     = dm_p
     rows.append(row)
 
 comp_df = pd.DataFrame(rows)
@@ -89,21 +98,26 @@ def _fmt_pct(x):
 
 model_names = list(loaded.keys())
 
-# Build display table: CV R² and Hold R² side by side per model, plus Hit
+# Build display table: RMSE, Skill, R², Hit per model
 disp_data = {"Horizon": [r["Horizon"] for r in rows]}
 
 for name in model_names:
-    disp_data[f"{name} CV R²"]   = [metrics.fmt(r.get(f"{name} CV R²"), ".3f") for r in rows]
-    disp_data[f"{name} Hold R²"] = [metrics.fmt(r.get(f"{name} R²"), ".3f") for r in rows]
+    disp_data[f"{name} RMSE"]    = [metrics.fmt(r.get(f"{name} RMSE"), ".4f") for r in rows]
+    disp_data[f"{name} RW RMSE"] = [metrics.fmt(r.get(f"{name} RW RMSE"), ".4f") for r in rows]
+    disp_data[f"{name} Skill %"] = [
+        f'{r.get(f"{name} Skill"):+.1f}%' if r.get(f"{name} Skill") is not None else "—"
+        for r in rows
+    ]
+    disp_data[f"{name} R²"]      = [metrics.fmt(r.get(f"{name} R²"), ".3f") for r in rows]
     disp_data[f"{name} Hit"]     = [_fmt_pct(r.get(f"{name} Hit")) for r in rows]
 
 disp = pd.DataFrame(disp_data)
 
 Plotter().results_table(
     disp,
-    "Model Comparison — CV vs Holdout 2022–2025\nR² and Hit Rate",
+    "Model Comparison — Holdout 2022–2025\nRMSE, Skill vs RW, R², Hit Rate",
     f"{RESULTS_DIR}/comparison_table.pdf",
-    width=max(18, len(disp.columns) * 1.5),
+    width=max(18, len(disp.columns) * 1.8),
 )
 print()
 
@@ -156,20 +170,20 @@ ax.set_title("Holdout Hit Rate  (higher = better, RW = 50%)")
 ax.legend()
 ax.grid(True, alpha=0.3, axis="y")
 
-# Panel 3: Skill vs RW
+# Panel 3: RMSE Skill vs RW
 ax = axes[2]
 for k, name in enumerate(model_names):
     vals = []
     for hz in HORIZON_ORDER:
         match = [r for r in rows if r["Horizon"] == hz]
         v = match[0].get(f"{name} Skill") if match else None
-        vals.append(v if pd.notna(v) and v is not None else 0)
+        vals.append(v if v is not None and pd.notna(v) else 0)
     ax.bar(x + k * width, vals, width, label=name, color=COLORS.get(name, f"C{k}"), alpha=0.85)
 ax.axhline(0, color="black", lw=0.8)
 ax.set_xticks(x + width * (len(model_names) - 1) / 2)
 ax.set_xticklabels(HORIZON_ORDER)
 ax.set_ylabel("Skill (%)")
-ax.set_title("RMSE Skill vs Random Walk  (higher = better, 0% = RW)")
+ax.set_title("RMSE Skill vs Random Walk  (positive = better than RW, 0% = RW)")
 ax.legend()
 ax.grid(True, alpha=0.3, axis="y")
 
