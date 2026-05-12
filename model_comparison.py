@@ -242,24 +242,33 @@ for target in sorted(all_targets):
     hz_match  = re.search(r"Y (\d+\w)", target)
     hz_label  = hz_match.group(1) if hz_match else "?"
 
-    # Load holdout predictions from each model
-    model_preds = {}
-    actuals     = None
-    dates       = None
-
+    # Load holdout predictions from each model and align on Date
+    merged = None
     for model_name, pred_dir in PRED_DIRS.items():
         pred_file = f"{pred_dir}/holdout_preds_{safe_name}.csv"
-        if os.path.exists(pred_file):
-            pdf = pd.read_csv(pred_file, parse_dates=["Date"])
-            model_preds[model_name] = pdf["Predicted"].values
-            if actuals is None:
-                actuals = pdf["Actual"].values
-                dates   = pdf["Date"].values
+        if not os.path.exists(pred_file):
+            continue
+        pdf = pd.read_csv(pred_file, parse_dates=["Date"]).rename(
+            columns={"Predicted": model_name}
+        )
+        if merged is None:
+            merged = pdf  # keeps Date, Actual, <model_name>
+        else:
+            merged = merged.merge(pdf[["Date", model_name]], on="Date", how="outer")
 
-    if actuals is None or len(model_preds) == 0:
+    if merged is None or len(merged) == 0:
         continue
 
-    print(f"  Comparison plot: {target} ({len(model_preds)} models)")
+    merged   = merged.sort_values("Date").reset_index(drop=True)
+    dates    = merged["Date"].values
+    actuals  = merged["Actual"].values
+    model_preds = {
+        name: merged[name].values
+        for name in PRED_DIRS
+        if name in merged.columns
+    }
+
+    print(f"  Comparison plot: {target} ({len(model_preds)} models, {len(dates)} dates)")
 
     fig, axes = plt.subplots(2, 1, figsize=(14, 10), facecolor="white")
     fig.suptitle(f"{target}  —  Holdout 2022–2025",
@@ -276,15 +285,17 @@ for target in sorted(all_targets):
     ax.legend(frameon=False, fontsize=9)
     _style_ax(ax, ylabel="∆ Price (NOK/kg)")
 
-    # Panel 2: Cumulative Squared Error
+    # Panel 2: Cumulative Squared Error (NaN-safe: drop rows missing actuals or this model's preds)
     ax = axes[1]
-    rw_sse = np.cumsum(actuals ** 2)
-    ax.plot(dates, rw_sse, label="Random Walk SSE",
-            color=_GREY, lw=1.2, ls="--", alpha=0.8)
     for model_name, preds in model_preds.items():
-        sse = np.cumsum((actuals - preds) ** 2)
-        ax.plot(dates, sse, label=f"{model_name} SSE",
+        mask = ~(np.isnan(actuals) | np.isnan(preds))
+        sse  = np.cumsum((actuals[mask] - preds[mask]) ** 2)
+        ax.plot(dates[mask], sse, label=f"{model_name} SSE",
                 color=COLORS.get(model_name, "C0"), lw=1.2, alpha=0.85)
+    mask_rw  = ~np.isnan(actuals)
+    rw_sse   = np.cumsum(actuals[mask_rw] ** 2)
+    ax.plot(dates[mask_rw], rw_sse, label="Random Walk SSE",
+            color=_GREY, lw=1.2, ls="--", alpha=0.8)
     ax.set_title("Cumulative Squared Error  (lower = better)", fontsize=10)
     ax.legend(frameon=False, fontsize=9)
     _style_ax(ax, ylabel="Cumulative SE")
