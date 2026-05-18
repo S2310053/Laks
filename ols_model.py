@@ -111,7 +111,11 @@ for target, cfg in HORIZONS.items():
         continue
 
     cv_data   = df[df["Date"] < HOLDOUT_START].dropna(subset=[target, fwd_feat]).copy().reset_index(drop=True)
-    hold_data = df[df["Date"] >= HOLDOUT_START].dropna(subset=[target, fwd_feat]).copy().reset_index(drop=True)
+    hold_data = df[df["Date"] >= HOLDOUT_START].dropna(subset=[target]).copy().reset_index(drop=True)
+    # Impute missing forward prices with pre-holdout mean — ensures a forecast for every holdout week
+    fwd_mean            = cv_data[fwd_feat].mean()
+    hold_data           = hold_data.copy()
+    hold_data[fwd_feat] = hold_data[fwd_feat].fillna(fwd_mean)
 
     # Embargo: final model training ends purge_wks before holdout so no training target overlaps holdout returns
     embargo_date = pd.Timestamp(HOLDOUT_START) - pd.Timedelta(weeks=purge_wks)
@@ -165,13 +169,15 @@ for target, cfg in HORIZONS.items():
     hold_actuals = hold_data[target].values
     hold_rmse    = metrics.rmse(hold_actuals, hold_preds)
     hold_rw_rmse = metrics.rw_rmse(hold_actuals)
+    hold_mae     = metrics.mae(hold_actuals, hold_preds)
+    hold_rw_mae  = metrics.rw_mae(hold_actuals)
     hold_r2      = metrics.r2(hold_actuals, hold_preds)
     hold_rw_r2   = metrics.rw_r2(hold_actuals)
     hold_hitrate = metrics.hit_rate(hold_actuals, hold_preds)
     dm_stat, dm_p = metrics.diebold_mariano(hold_actuals, hold_preds, horizon=max(purge_wks, 1))
 
-    print(f"Holdout RMSE={hold_rmse:.4f} RW_RMSE={hold_rw_rmse:.4f}  "
-          f"R²={hold_r2:.4f}  RW_R²={hold_rw_r2:.4f}  Hit={hold_hitrate:.1%}  DM={dm_stat:.2f}  p={dm_p:.3f}")
+    print(f"Holdout RMSE={hold_rmse:.4f}  MAE={hold_mae:.4f}  RW_RMSE={hold_rw_rmse:.4f}  "
+          f"R²={hold_r2:.4f}  Hit={hold_hitrate:.1%}  DM={dm_stat:.2f}  p={dm_p:.3f}")
 
     # Save holdout predictions for model comparison plots
     pd.DataFrame({
@@ -195,6 +201,8 @@ for target, cfg in HORIZONS.items():
         "CV Hit":        cv_hitrate,
         "Hold RMSE":     hold_rmse,
         "Hold RW RMSE":  hold_rw_rmse,
+        "Hold MAE":      hold_mae,
+        "Hold RW MAE":   hold_rw_mae,
         "Hold R2":       hold_r2,
         "Hold RW R2":    hold_rw_r2,
         "Hold Hit":      hold_hitrate,
@@ -246,27 +254,29 @@ summary_df.to_csv(f"{RESULTS_DIR}/ols_summary.csv")
 
 # PDF results table
 disp = pd.DataFrame({
-    "Horizon":   [r["Horizon"] for r in summary],
-    "FWD":       [r["FWD"] for r in summary],
-    "β":         [f'{r["β"]:.3f}' for r in summary],
-    "p(β=1)":    [f'{r["p(β=1)"]:.3f}' if r["p(β=1)"] >= 0.001 else "< 0.001" for r in summary],
-    "CV RMSE":   [metrics.fmt(r["CV RMSE"]) for r in summary],
-    "CV R²":     [metrics.fmt(r["CV R2"], ".3f") for r in summary],
-    "CV Hit":    [f'{r["CV Hit"]:.1%}' if r["CV Hit"] else "—" for r in summary],
-    "Hold RMSE": [metrics.fmt(r["Hold RMSE"]) for r in summary],
-    "Hold R²":   [metrics.fmt(r["Hold R2"], ".3f") for r in summary],
-    "Hold Hit":  [f'{r["Hold Hit"]:.1%}' if r["Hold Hit"] else "—" for r in summary],
-    "RW RMSE":   [metrics.fmt(r["Hold RW RMSE"]) for r in summary],
-    "Skill %":   [f'{(1 - r["Hold RMSE"]/r["Hold RW RMSE"])*100:+.1f}%' for r in summary],
-    "DM":        [metrics.fmt(r["Hold DM"], ".2f") for r in summary],
-    "p-value":   [f'{r["Hold DM p"]:.4f}' if r["Hold DM p"] >= 0.001
-                  else "< 0.001" for r in summary],
+    "Horizon":    [r["Horizon"] for r in summary],
+    "FWD":        [r["FWD"] for r in summary],
+    "β":          [f'{r["β"]:.3f}' for r in summary],
+    "p(β=1)":     [f'{r["p(β=1)"]:.3f}' if r["p(β=1)"] >= 0.001 else "< 0.001" for r in summary],
+    "CV RMSE":    [metrics.fmt(r["CV RMSE"]) for r in summary],
+    "CV R²":      [metrics.fmt(r["CV R2"], ".3f") for r in summary],
+    "CV Hit":     [f'{r["CV Hit"]:.1%}' if r["CV Hit"] else "—" for r in summary],
+    "Hold RMSE":  [metrics.fmt(r["Hold RMSE"]) for r in summary],
+    "Hold MAE":   [metrics.fmt(r["Hold MAE"]) for r in summary],
+    "Hold R²":    [metrics.fmt(r["Hold R2"], ".3f") for r in summary],
+    "Hold Hit":   [f'{r["Hold Hit"]:.1%}' if r["Hold Hit"] else "—" for r in summary],
+    "RW RMSE":    [metrics.fmt(r["Hold RW RMSE"]) for r in summary],
+    "Skill%":     [f'{(1 - r["Hold RMSE"]/r["Hold RW RMSE"])*100:+.1f}%' for r in summary],
+    "MAE Skill%": [f'{(1 - r["Hold MAE"]/r["Hold RW MAE"])*100:+.1f}%' for r in summary],
+    "DM":         [metrics.fmt(r["Hold DM"], ".2f") for r in summary],
+    "p(DM)":      [f'{r["Hold DM p"]:.4f}' if r["Hold DM p"] >= 0.001
+                   else "< 0.001" for r in summary],
 })
 
 Plotter().results_table(
     disp,
     "OLS Forward Benchmark — Results Summary\n"
-    "Holdout: 2022–2025 | Purged CV | Y_h ~ α + β·FWD_h  (EH: β=1)",
+    "Holdout: 2022–2025 | Purged CV | Y_h ~ α + β·FWD_h  (EH: β=1) | DM = Harvey et al. (1997) vs RW",
     f"{RESULTS_DIR}/ols_results.pdf",
-    width=18,
+    width=22,
 )

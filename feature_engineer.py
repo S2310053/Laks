@@ -298,6 +298,14 @@ class FeatureEngineer:
         out["∆ Salmon (NOK/KG) 6m"]  = _dln_spot.rolling(26).mean().shift(1)
         out["∆ Salmon (NOK/KG) 12m"] = _dln_spot.rolling(52).mean().shift(1)
 
+        # Price acceleration: second derivative of log price at two time scales
+        # acc_1w = r_{t-1} - r_{t-2}: is the weekly return accelerating or decelerating?
+        # acc_1m = 4w avg ending t-1 minus 4w avg ending t-5: same question at monthly scale
+        # Both are fully shifted — no look-ahead
+        out["Acc 1w"] = _dln_spot.diff().shift(1)
+        out["Acc 1m"] = (_dln_spot.rolling(4).mean().shift(1)
+                         - _dln_spot.rolling(4).mean().shift(5))
+
         # Realized (rolling) volatility
         out["RVol 4w"]  = _dln_spot.rolling(4).std().shift(1) # Fast signal for onset of volatility
         out["RVol 13w"] = _dln_spot.rolling(13).std().shift(1) # Medium signal for sustained high-vol window (captures typical seasonal volatility peaks)

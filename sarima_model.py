@@ -190,14 +190,16 @@ for target in Y_COLS:
 
         cv_rmse    = metrics.rmse(cv_actuals, cv_preds)
         cv_rw_rmse = metrics.rw_rmse(cv_actuals)
+        cv_mae     = metrics.mae(cv_actuals, cv_preds)
+        cv_rw_mae  = metrics.rw_mae(cv_actuals)
         cv_r2      = metrics.r2(cv_actuals, cv_preds)
         cv_rw_r2   = metrics.rw_r2(cv_actuals)
         cv_hitrate = metrics.hit_rate(cv_actuals, cv_preds)
-        print(f"CV RMSE={cv_rmse:.4f} RW_RMSE={cv_rw_rmse:.4f}  "
+        print(f"CV RMSE={cv_rmse:.4f}  MAE={cv_mae:.4f}  RW_RMSE={cv_rw_rmse:.4f}  "
               f"R²={cv_r2:.4f}  Hit={cv_hitrate:.1%}  "
               f"(n_obs={len(cv_actuals)}, folds={len(fold_results)}, {time.time()-t0:.0f}s)")
     else:
-        cv_rmse = cv_rw_rmse = cv_r2 = cv_rw_r2 = cv_hitrate = None
+        cv_rmse = cv_rw_rmse = cv_mae = cv_rw_mae = cv_r2 = cv_rw_r2 = cv_hitrate = None
         cv_preds = cv_actuals = cv_dates = []
         print("CV: insufficient data")
 
@@ -234,13 +236,15 @@ for target in Y_COLS:
         hold_actuals  = hold_data[target].values
         hold_rmse     = metrics.rmse(hold_actuals, hold_preds)
         hold_rw_rmse  = metrics.rw_rmse(hold_actuals)
+        hold_mae      = metrics.mae(hold_actuals, hold_preds)
+        hold_rw_mae   = metrics.rw_mae(hold_actuals)
         hold_r2       = metrics.r2(hold_actuals, hold_preds)
         hold_rw_r2    = metrics.rw_r2(hold_actuals)
         hold_hitrate  = metrics.hit_rate(hold_actuals, hold_preds)
         dm_stat, dm_p = metrics.diebold_mariano(hold_actuals, hold_preds, horizon=max(purge_wks, 1))
 
-        print(f"Holdout RMSE={hold_rmse:.4f} RW_RMSE={hold_rw_rmse:.4f}  "
-              f"R²={hold_r2:.4f}  RW_R²={hold_rw_r2:.4f}  Hit={hold_hitrate:.1%}  "
+        print(f"Holdout RMSE={hold_rmse:.4f}  MAE={hold_mae:.4f}  RW_RMSE={hold_rw_rmse:.4f}  "
+              f"R²={hold_r2:.4f}  Hit={hold_hitrate:.1%}  "
               f"DM={dm_stat:.2f}  p={dm_p:.3f}  ({hold_order}, {time.time()-t0:.0f}s)")
 
         # Save holdout predictions for model comparison plots
@@ -251,7 +255,8 @@ for target in Y_COLS:
         }).to_csv(f"{RESULTS_DIR}/holdout_preds_{target.replace('/', '-').replace(' ', '_')}.csv", index=False)
 
     except Exception as e:
-        hold_rmse = hold_rw_rmse = hold_r2 = hold_rw_r2 = hold_hitrate = None
+        hold_rmse = hold_rw_rmse = hold_mae = hold_rw_mae = None
+        hold_r2 = hold_rw_r2 = hold_hitrate = None
         dm_stat = dm_p = None
         hold_actuals = hold_data[target].values
         print(f"Holdout FAILED: {e}")
@@ -262,11 +267,15 @@ for target in Y_COLS:
         "Nowcast":       is_nowcast,
         "CV RMSE":       cv_rmse,
         "CV RW RMSE":    cv_rw_rmse,
+        "CV MAE":        cv_mae,
+        "CV RW MAE":     cv_rw_mae,
         "CV R2":         cv_r2,
         "CV RW R2":      cv_rw_r2,
         "CV Hit":        cv_hitrate,
         "Hold RMSE":     hold_rmse,
         "Hold RW RMSE":  hold_rw_rmse,
+        "Hold MAE":      hold_mae,
+        "Hold RW MAE":   hold_rw_mae,
         "Hold R2":       hold_r2,
         "Hold RW R2":    hold_rw_r2,
         "Hold Hit":      hold_hitrate,
@@ -322,25 +331,29 @@ summary_df.to_csv(f"{RESULTS_DIR}/sarima_summary.csv")
 
 # PDF results table
 disp = pd.DataFrame({
-    "Horizon":   [r["Horizon"] for r in summary],
-    "CV RMSE":   [metrics.fmt(r["CV RMSE"]) for r in summary],
-    "CV R²":     [metrics.fmt(r["CV R2"], ".3f") for r in summary],
-    "CV Hit":    [f'{r["CV Hit"]:.1%}' if r["CV Hit"] else "—" for r in summary],
-    "Hold RMSE": [metrics.fmt(r["Hold RMSE"]) for r in summary],
-    "Hold R²":   [metrics.fmt(r["Hold R2"], ".3f") for r in summary],
-    "Hold Hit":  [f'{r["Hold Hit"]:.1%}' if r["Hold Hit"] else "—" for r in summary],
-    "RW RMSE":   [metrics.fmt(r["Hold RW RMSE"]) for r in summary],
-    "Skill %":   [f'{(1 - r["Hold RMSE"]/r["Hold RW RMSE"])*100:+.1f}%'
-                  if r["Hold RMSE"] and r["Hold RW RMSE"] else "—" for r in summary],
-    "DM":        [metrics.fmt(r["Hold DM"], ".2f") for r in summary],
-    "p-value":   [f'{r["Hold DM p"]:.4f}' if r["Hold DM p"] is not None and r["Hold DM p"] >= 0.001
-                  else ("< 0.001" if r["Hold DM p"] is not None else "—") for r in summary],
-    "Order":     [r["Order"] for r in summary],
+    "Horizon":    [r["Horizon"] for r in summary],
+    "CV RMSE":    [metrics.fmt(r["CV RMSE"]) for r in summary],
+    "CV MAE":     [metrics.fmt(r["CV MAE"]) for r in summary],
+    "CV R²":      [metrics.fmt(r["CV R2"], ".3f") for r in summary],
+    "CV Hit":     [f'{r["CV Hit"]:.1%}' if r["CV Hit"] else "—" for r in summary],
+    "Hold RMSE":  [metrics.fmt(r["Hold RMSE"]) for r in summary],
+    "Hold MAE":   [metrics.fmt(r["Hold MAE"]) for r in summary],
+    "Hold R²":    [metrics.fmt(r["Hold R2"], ".3f") for r in summary],
+    "Hold Hit":   [f'{r["Hold Hit"]:.1%}' if r["Hold Hit"] else "—" for r in summary],
+    "RW RMSE":    [metrics.fmt(r["Hold RW RMSE"]) for r in summary],
+    "Skill%":     [f'{(1 - r["Hold RMSE"]/r["Hold RW RMSE"])*100:+.1f}%'
+                   if r["Hold RMSE"] and r["Hold RW RMSE"] else "—" for r in summary],
+    "MAE Skill%": [f'{(1 - r["Hold MAE"]/r["Hold RW MAE"])*100:+.1f}%'
+                   if r["Hold MAE"] and r["Hold RW MAE"] else "—" for r in summary],
+    "DM":         [metrics.fmt(r["Hold DM"], ".2f") for r in summary],
+    "p(DM)":      [f'{r["Hold DM p"]:.4f}' if r["Hold DM p"] is not None and r["Hold DM p"] >= 0.001
+                   else ("< 0.001" if r["Hold DM p"] is not None else "—") for r in summary],
+    "Order":      [r["Order"] for r in summary],
 })
 
 Plotter().results_table(
     disp,
-    "SARIMA — Results Summary\nHoldout: 2022–2025 | Purged CV | BIC Selection (m=52)",
+    "SARIMA — Results Summary\nHoldout: 2022–2025 | Purged CV | BIC Selection (m=52) | DM = Harvey et al. (1997) vs RW",
     f"{RESULTS_DIR}/sarima_results.pdf",
-    width=18,
+    width=22,
 )

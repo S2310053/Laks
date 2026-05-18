@@ -5,6 +5,8 @@ Feature,ADF stat,ADF p,ADF 5% cv,KPSS stat,KPSS p,KPSS 5% cv,Verdict,KPSS p note
 ∆ Salmon (NOK/KG) 3m,-9.181,0.0,-2.864,0.017,0.1,0.463,I(0),"p-value capped at boundary (true p outside [0.01, 0.10])"
 ∆ Salmon (NOK/KG) 6m,-9.662,0.0,-2.864,0.042,0.1,0.463,I(0),"p-value capped at boundary (true p outside [0.01, 0.10])"
 ∆ Salmon (NOK/KG) 12m,-4.357,0.0004,-2.864,0.121,0.1,0.463,I(0),"p-value capped at boundary (true p outside [0.01, 0.10])"
+Acc 1w,-11.122,0.0,-2.864,0.063,0.1,0.463,I(0),"p-value capped at boundary (true p outside [0.01, 0.10])"
+Acc 1m,-9.756,0.0,-2.864,0.011,0.1,0.463,I(0),"p-value capped at boundary (true p outside [0.01, 0.10])"
 RVol 4w,-8.987,0.0,-2.864,0.151,0.1,0.463,I(0),"p-value capped at boundary (true p outside [0.01, 0.10])"
 RVol 13w,-5.602,0.0,-2.864,0.246,0.1,0.463,I(0),"p-value capped at boundary (true p outside [0.01, 0.10])"
 RVol 52w,-3.004,0.0345,-2.864,0.337,0.1,0.463,I(0),"p-value capped at boundary (true p outside [0.01, 0.10])"

@@ -49,6 +49,7 @@ from plotter import Plotter
 df = pd.read_csv("Data/Factors.csv", parse_dates=["Date"])
 
 HOLDOUT_START = "2022-01-01"
+OLS_RESULTS   = "Results/OLS"          # for Clark-West vs OLS benchmark
 
 # Identify Y columns and features
 Y_COLS   = [c for c in df.columns if c.startswith("Y ")]
@@ -58,6 +59,9 @@ ALL_FEAT = [c for c in df.columns if c not in NON_FEAT]
 # Create folder to store results
 RESULTS_DIR = "Results/Lasso"
 os.makedirs(RESULTS_DIR, exist_ok=True)
+
+# CW test only for horizons where OLS forward benchmark exists
+CW_HORIZONS = {"1m", "3m", "6m", "12m"}
 
 # Same structure as OLS to get results comparison with CatBoost for CV splits, as well as final holdout period
 HORIZON_CONFIG = {
@@ -70,8 +74,10 @@ HORIZON_CONFIG = {
     "12m": {"purge_weeks": 52, "n_folds":  3},
 }
 
-# Lasso settings 
-# Note: Base setings can be adjusted if seen fit
+# Lasso settings
+# TimeSeriesSplit(5) respects temporal order within the training window so
+# future training observations are never used to select alpha
+# Note: Setings can be adjusted if seen fit
 ALPHAS      = np.logspace(-4, 1, 100)
 INNER_CV    = TimeSeriesSplit(n_splits=5)
 MAX_ITER    = 10_000
@@ -81,6 +87,9 @@ def parse_horizon(target):
     return m.group(1) if m else "0w"
 
 # Purged k-fold CV
+# NaN handling: drop columns entirely NaN in training; impute remaining NaN with training-fold column means.
+# This is consistent with the holdout imputation and avoids discarding features that are missing only
+# in early folds (e.g. forward prices not yet available).
 def purged_cv(data, target, features, purge_weeks, n_folds):
     n         = len(data)
     fold_size = n // n_folds
@@ -104,18 +113,21 @@ def purged_cv(data, target, features, purge_weeks, n_folds):
         y_tr = train[target].values
         X_te = test[features].values
 
-        # Drop columns that have any NaN in the training fold
-        valid_cols  = ~np.any(np.isnan(X_tr), axis=0)
-        X_tr        = X_tr[:, valid_cols]
-        X_te        = X_te[:, valid_cols]
+        # Drop columns entirely NaN in training; impute remaining with training-fold means
+        valid_cols = ~np.all(np.isnan(X_tr), axis=0)
+        X_tr_v     = X_tr[:, valid_cols]
+        X_te_v     = X_te[:, valid_cols]
+        col_means  = np.nanmean(X_tr_v, axis=0)
+        X_tr_v     = np.where(np.isnan(X_tr_v), col_means, X_tr_v)
+        X_te_v     = np.where(np.isnan(X_te_v), col_means, X_te_v)
 
         scaler = StandardScaler()
-        X_tr   = scaler.fit_transform(X_tr)
-        X_te   = scaler.transform(X_te)
+        X_tr_s = scaler.fit_transform(X_tr_v)
+        X_te_s = scaler.transform(X_te_v)
 
         model  = LassoCV(alphas=ALPHAS, cv=INNER_CV, max_iter=MAX_ITER)
-        model.fit(X_tr, y_tr)
-        preds = model.predict(X_te)
+        model.fit(X_tr_s, y_tr)
+        preds = model.predict(X_te_s)
 
         results.append({
             "dates":      test["Date"].values,
@@ -165,17 +177,19 @@ for target in Y_COLS:
 
         cv_rmse    = metrics.rmse(cv_actuals, cv_preds)
         cv_rw_rmse = metrics.rw_rmse(cv_actuals)
+        cv_mae     = metrics.mae(cv_actuals, cv_preds)
+        cv_rw_mae  = metrics.rw_mae(cv_actuals)
         cv_r2      = metrics.r2(cv_actuals, cv_preds)
         cv_rw_r2   = metrics.rw_r2(cv_actuals)
         cv_hitrate = metrics.hit_rate(cv_actuals, cv_preds)
 
-        print(f"CV RMSE={cv_rmse:.4f}  RW_RMSE={cv_rw_rmse:.4f}  "
+        print(f"CV RMSE={cv_rmse:.4f}  MAE={cv_mae:.4f}  RW_RMSE={cv_rw_rmse:.4f}  "
               f"R²={cv_r2:.4f}  Hit={cv_hitrate:.1%}  "
               f"(n_obs={len(cv_actuals)}, folds={len(fold_results)})")
         print(f"alpha range [{min(cv_alphas):.5f}, {max(cv_alphas):.5f}]  "
               f"nonzero coefs {min(cv_nonzeros)}–{max(cv_nonzeros)}")
     else:
-        cv_rmse = cv_rw_rmse = cv_r2 = cv_rw_r2 = cv_hitrate = None
+        cv_rmse = cv_rw_rmse = cv_mae = cv_rw_mae = cv_r2 = cv_rw_r2 = cv_hitrate = None
         cv_preds = cv_actuals = cv_dates = []
         cv_alphas = cv_nonzeros = []
         print("CV: insufficient data for all folds")
@@ -185,13 +199,15 @@ for target in Y_COLS:
     X_cv = train_final[ALL_FEAT].values
     y_cv = train_final[target].values
 
-    valid_cols_final  = ~np.all(np.isnan(X_cv), axis=0)
-    X_cv_v            = X_cv[:, valid_cols_final]
-    col_means_final   = np.nanmean(X_cv_v, axis=0)
-    X_cv_clean        = np.where(np.isnan(X_cv_v), col_means_final, X_cv_v)
+    # Drop columns entirely NaN in training; impute remaining with pre-holdout column means.
+    # Imputing (rather than dropping rows) ensures a prediction for every holdout week.
+    valid_cols_final = ~np.all(np.isnan(X_cv), axis=0)
+    X_cv_v           = X_cv[:, valid_cols_final]
+    col_means_final  = np.nanmean(X_cv_v, axis=0)
+    X_cv_clean       = np.where(np.isnan(X_cv_v), col_means_final, X_cv_v)
 
-    X_hold     = hold_data[ALL_FEAT].values
-    X_hold_v   = X_hold[:, valid_cols_final]
+    X_hold       = hold_data[ALL_FEAT].values
+    X_hold_v     = X_hold[:, valid_cols_final]
     X_hold_clean = np.where(np.isnan(X_hold_v), col_means_final, X_hold_v)
 
     scaler_final = StandardScaler()
@@ -201,22 +217,15 @@ for target in Y_COLS:
     final_model = LassoCV(alphas=ALPHAS, cv=INNER_CV, max_iter=MAX_ITER)
     final_model.fit(X_cv_sc, y_cv)
 
-    # Holdout period performance — drop rows where features have NaN
-    hold_preds_all   = final_model.predict(X_hold_sc)
-    hold_actuals_all = hold_data[target].values
-    hold_dates_all   = hold_data["Date"].values
-
-    # Mask: rows in holdout with no NaN across the valid feature columns
-    hold_valid_mask  = ~np.any(np.isnan(X_hold_v), axis=1)
-    hold_preds       = hold_preds_all[hold_valid_mask]
-    hold_actuals     = hold_actuals_all[hold_valid_mask]
-    hold_dates_clean = hold_dates_all[hold_valid_mask]
-
-    print(f"Holdout: {hold_valid_mask.sum()}/{len(hold_valid_mask)} rows used "
-          f"({(~hold_valid_mask).sum()} dropped due to NaN)")
+    # Holdout predictions — NaN imputed with pre-holdout means, all weeks covered
+    hold_preds    = final_model.predict(X_hold_sc)
+    hold_actuals  = hold_data[target].values
+    hold_dates    = hold_data["Date"].values
 
     hold_rmse    = metrics.rmse(hold_actuals, hold_preds)
     hold_rw_rmse = metrics.rw_rmse(hold_actuals)
+    hold_mae     = metrics.mae(hold_actuals, hold_preds)
+    hold_rw_mae  = metrics.rw_mae(hold_actuals)
     hold_r2      = metrics.r2(hold_actuals, hold_preds)
     hold_rw_r2   = metrics.rw_r2(hold_actuals)
     hold_hitrate = metrics.hit_rate(hold_actuals, hold_preds)
@@ -225,13 +234,31 @@ for target in Y_COLS:
     n_nonzero_final = int(np.sum(final_model.coef_ != 0))
     best_alpha      = final_model.alpha_
 
-    print(f"Holdout RMSE={hold_rmse:.4f}  RW_RMSE={hold_rw_rmse:.4f}  "
-          f"R²={hold_r2:.4f}  RW_R²={hold_rw_r2:.4f}  Hit={hold_hitrate:.1%}  "
-          f"DM={dm_stat:.2f}  p={dm_p:.3f}")
+    # Clark-West test vs OLS benchmark (only for horizons with forward contracts)
+    cw_stat, cw_p = None, None
+    if horizon in CW_HORIZONS:
+        safe_name_ols = target.replace("/", "-").replace(" ", "_")
+        ols_csv = f"{OLS_RESULTS}/holdout_preds_{safe_name_ols}.csv"
+        if os.path.exists(ols_csv):
+            ols_df  = pd.read_csv(ols_csv, parse_dates=["Date"])
+            merged  = pd.DataFrame({"Date": hold_dates, "Pred": hold_preds, "Actual": hold_actuals})
+            merged  = merged.merge(
+                ols_df[["Date", "Predicted"]].rename(columns={"Predicted": "OLS_Pred"}),
+                on="Date", how="inner")
+            if len(merged) >= 10:
+                cw_stat, cw_p = metrics.clark_west(
+                    merged["Actual"].values, merged["Pred"].values,
+                    horizon=max(purge_wks, 1),
+                    benchmark_pred=merged["OLS_Pred"].values)
+
+    print(f"Holdout RMSE={hold_rmse:.4f}  MAE={hold_mae:.4f}  RW_RMSE={hold_rw_rmse:.4f}  "
+          f"R²={hold_r2:.4f}  Hit={hold_hitrate:.1%}  "
+          f"DM={dm_stat:.2f}  p={dm_p:.3f}"
+          + (f"  CW={cw_stat:.2f}  p={cw_p:.3f}" if cw_stat is not None else ""))
 
     # Save holdout predictions for model comparison plots
     pd.DataFrame({
-        "Date": hold_dates_clean,
+        "Date": hold_dates,
         "Actual": hold_actuals,
         "Predicted": hold_preds,
     }).to_csv(f"{RESULTS_DIR}/holdout_preds_{target.replace('/', '-').replace(' ', '_')}.csv", index=False)
@@ -243,24 +270,30 @@ for target in Y_COLS:
         "Nowcast":        is_nowcast,
         "CV RMSE":        cv_rmse,
         "CV RW RMSE":     cv_rw_rmse,
+        "CV MAE":         cv_mae,
+        "CV RW MAE":      cv_rw_mae,
         "CV R2":          cv_r2,
         "CV RW R2":       cv_rw_r2,
         "CV Hit":         cv_hitrate,
         "Hold RMSE":      hold_rmse,
         "Hold RW RMSE":   hold_rw_rmse,
+        "Hold MAE":       hold_mae,
+        "Hold RW MAE":    hold_rw_mae,
         "Hold R2":        hold_r2,
         "Hold RW R2":     hold_rw_r2,
         "Hold Hit":       hold_hitrate,
         "Hold DM":        dm_stat,
         "Hold DM p":      dm_p,
+        "Hold CW":        cw_stat,
+        "Hold CW p":      cw_p,
         "Best Alpha":     best_alpha,
         "Nonzero Coefs":  n_nonzero_final,
         "Total Features": len(final_model.coef_),
         "n_train":        len(cv_data),
-        "n_holdout":      int(hold_valid_mask.sum()),
+        "n_holdout":      len(hold_data),
     })
 
-    # Plot (non-zero only)
+    # Plot (non-zero coefficients only)
     feat_names   = np.array(ALL_FEAT)[valid_cols_final]
     coef_series  = pd.Series(final_model.coef_, index=feat_names)
     nonzero_coef = coef_series[coef_series != 0].sort_values()
@@ -275,17 +308,21 @@ for target in Y_COLS:
         axes[ax_idx].plot(cv_dates, cv_actuals, label="Actual",    color=_DARK, lw=1.5, alpha=0.85)
         axes[ax_idx].plot(cv_dates, cv_preds,   label="Predicted", color=_BLUE, lw=1.2, alpha=0.85)
         axes[ax_idx].axhline(0, color=_GREY, lw=0.8, ls="--")
-        axes[ax_idx].set_title(f"Purged CV — RMSE={cv_rmse:.4f} | RW={cv_rw_rmse:.4f} | R²={cv_r2:.4f}",
-                               fontsize=10)
+        axes[ax_idx].set_title(
+            f"Purged CV — RMSE={cv_rmse:.4f}  MAE={cv_mae:.4f}  | RW={cv_rw_rmse:.4f} | R²={cv_r2:.4f}",
+            fontsize=10)
         axes[ax_idx].legend(frameon=False, fontsize=9)
         _style_ax(axes[ax_idx], ylabel="∆ Price (NOK/kg)")
         ax_idx += 1
 
-    axes[ax_idx].plot(hold_dates_clean, hold_actuals, label="Actual",    color=_DARK, lw=1.5, alpha=0.85)
-    axes[ax_idx].plot(hold_dates_clean, hold_preds,   label="Predicted", color=_BLUE, lw=1.2, alpha=0.85)
+    _hold_title = (f"Holdout 2022–2025 — RMSE={hold_rmse:.4f}  MAE={hold_mae:.4f}  |  "
+                   f"R²={hold_r2:.4f}  | DM p={dm_p:.3f}  | α={best_alpha:.5f}")
+    if cw_stat is not None:
+        _hold_title += f"  | CW p={cw_p:.3f}"
+    axes[ax_idx].plot(hold_dates, hold_actuals, label="Actual",    color=_DARK, lw=1.5, alpha=0.85)
+    axes[ax_idx].plot(hold_dates, hold_preds,   label="Predicted", color=_BLUE, lw=1.2, alpha=0.85)
     axes[ax_idx].axhline(0, color=_GREY, lw=0.8, ls="--", label="Random Walk")
-    axes[ax_idx].set_title(f"Holdout 2022–2025 — RMSE={hold_rmse:.4f}  |  RW={hold_rw_rmse:.4f}  |  "
-                           f"R²={hold_r2:.4f} | DM p={dm_p:.3f} | α={best_alpha:.5f}", fontsize=10)
+    axes[ax_idx].set_title(_hold_title, fontsize=10)
     axes[ax_idx].legend(frameon=False, fontsize=9)
     _style_ax(axes[ax_idx], ylabel="∆ Price (NOK/kg)")
     ax_idx += 1
@@ -321,23 +358,29 @@ summary_df.to_csv(f"{RESULTS_DIR}/lasso_summary.csv")
 disp = pd.DataFrame({
     "Horizon":    [r["Horizon"] for r in summary],
     "CV RMSE":    [metrics.fmt(r["CV RMSE"]) for r in summary],
+    "CV MAE":     [metrics.fmt(r["CV MAE"]) for r in summary],
     "CV R²":      [metrics.fmt(r["CV R2"], ".3f") for r in summary],
     "CV Hit":     [f'{r["CV Hit"]:.1%}' if r["CV Hit"] else "—" for r in summary],
     "Hold RMSE":  [metrics.fmt(r["Hold RMSE"]) for r in summary],
+    "Hold MAE":   [metrics.fmt(r["Hold MAE"]) for r in summary],
     "Hold R²":    [metrics.fmt(r["Hold R2"], ".3f") for r in summary],
     "Hold Hit":   [f'{r["Hold Hit"]:.1%}' if r["Hold Hit"] else "—" for r in summary],
     "RW RMSE":    [metrics.fmt(r["Hold RW RMSE"]) for r in summary],
-    "Skill %":    [f'{(1 - r["Hold RMSE"]/r["Hold RW RMSE"])*100:+.1f}%' for r in summary],
+    "Skill%":     [f'{(1 - r["Hold RMSE"]/r["Hold RW RMSE"])*100:+.1f}%' for r in summary],
+    "MAE Skill%": [f'{(1 - r["Hold MAE"]/r["Hold RW MAE"])*100:+.1f}%' for r in summary],
     "DM":         [metrics.fmt(r["Hold DM"], ".2f") for r in summary],
-    "p-value":    [f'{r["Hold DM p"]:.4f}' if r["Hold DM p"] >= 0.001
+    "p(DM)":      [f'{r["Hold DM p"]:.4f}' if r["Hold DM p"] >= 0.001
                    else "< 0.001" for r in summary],
+    "CW":         [metrics.fmt(r["Hold CW"], ".2f") for r in summary],
+    "p(CW)":      [f'{r["Hold CW p"]:.4f}' if r["Hold CW p"] is not None and r["Hold CW p"] >= 0.001
+                   else ("< 0.001" if r["Hold CW p"] is not None else "—") for r in summary],
     "α":          [f'{r["Best Alpha"]:.5f}' for r in summary],
     "Nonzero":    [f'{r["Nonzero Coefs"]}/{r["Total Features"]}' for r in summary],
 })
 
 Plotter().results_table(
     disp,
-    "Lasso — Results Summary\nHoldout: 2022–2025 | Purged CV | LassoCV",
+    "Lasso — Results Summary\nHoldout: 2022–2025 | Purged CV | LassoCV | DM = Harvey et al. (1997) vs RW | CW = Clark-West (2007) vs OLS",
     f"{RESULTS_DIR}/lasso_results.pdf",
-    width=18,
+    width=24,
 )
