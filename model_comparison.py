@@ -262,6 +262,44 @@ for hz in HORIZON_ORDER:
     skill_str = f"{best_skill:+.1f}%" if best_skill > -np.inf else "—"
     print(f"  {hz:>7}  {best_r2_name:<12}  {r2_str:>6}  {best_skill_name:<14}  {skill_str:>6}")
 
+# Overall ranking by average holdout RMSE across all horizons
+print("\n── Overall Ranking by Avg Holdout RMSE ─────────────────────")
+avg_rmse = {}
+avg_skill = {}
+for name in model_names:
+    rmse_vals  = [r.get(f"{name} RMSE")  for r in rows if r.get(f"{name} RMSE")  is not None and pd.notna(r.get(f"{name} RMSE"))]
+    skill_vals = [r.get(f"{name} Skill") for r in rows if r.get(f"{name} Skill") is not None and pd.notna(r.get(f"{name} Skill"))]
+    avg_rmse[name]  = np.mean(rmse_vals)  if rmse_vals  else np.nan
+    avg_skill[name] = np.mean(skill_vals) if skill_vals else np.nan
+
+ranking = sorted(avg_rmse.items(), key=lambda x: x[1] if pd.notna(x[1]) else np.inf)
+print(f"  {'Rank':>4}  {'Model':<12}  {'Avg RMSE':>9}  {'Avg Skill vs RW':>15}")
+for rank, (name, rmse) in enumerate(ranking, 1):
+    skill_str = f"{avg_skill[name]:+.2f}%" if pd.notna(avg_skill.get(name, np.nan)) else "—"
+    rmse_str  = f"{rmse:.4f}"              if pd.notna(rmse)                          else "—"
+    print(f"  {rank:>4}  {name:<12}  {rmse_str:>9}  {skill_str:>15}")
+
+# Add ranking row to PDF table
+rank_row_rmse  = {"Horizon": "Avg RMSE"}
+rank_row_rank  = {"Horizon": "Rank"}
+for name in model_names:
+    rank_row_rmse[f"{name} RMSE"]    = metrics.fmt(avg_rmse.get(name), ".4f")
+    rank_row_rmse[f"{name} MAE"]     = "—"
+    rank_row_rmse[f"{name} Skill%"]  = f"{avg_skill.get(name, np.nan):+.1f}%" if pd.notna(avg_skill.get(name, np.nan)) else "—"
+    rank_row_rmse[f"{name} R²"]      = "—"
+    rank_row_rmse[f"{name} Hit"]     = "—"
+    rank_row_rmse[f"{name} p(DM)"]   = "—"
+    rank_row_rmse[f"{name} p(CW)"]   = "—"
+    rank_row_rank[f"{name} RMSE"]    = str(next(i+1 for i, (n, _) in enumerate(ranking) if n == name))
+    rank_row_rank[f"{name} MAE"]     = "—"
+    rank_row_rank[f"{name} Skill%"]  = "—"
+    rank_row_rank[f"{name} R²"]      = "—"
+    rank_row_rank[f"{name} Hit"]     = "—"
+    rank_row_rank[f"{name} p(DM)"]   = "—"
+    rank_row_rank[f"{name} p(CW)"]   = "—"
+
+disp = pd.concat([disp, pd.DataFrame([rank_row_rmse, rank_row_rank])], ignore_index=True)
+
 # Time-series comparison plots per horizon
 # Panel 1: Predicted vs Actual (all models + RW)
 # Panel 2: Cumulative Squared Error (lower = better)
