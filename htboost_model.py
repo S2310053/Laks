@@ -85,7 +85,7 @@ HT_NTREES   = 2000
 # Loss functions to run: (HTBoost loss name, output subdirectory label)
 # loss="L2" for RMSE-equivalent; can switch to "Huber" or "t" for heavy tails
 # Note: Settings can be adjusted if seen fit
-LOSS_FNS = [("L2", "RMSE"), ("MAE", "MAE")]
+LOSS_FNS = [("L2", "RMSE"), ("quantile", "MAE")]
 
 # Helper to extract horizon from Y column name
 def parse_horizon(target):
@@ -109,7 +109,8 @@ def _fit_htboost(X_train, y_train, X_test, feature_names, ht_loss, purge_weeks=0
     x_train_jl = jl.DataFrame(df_train)
     x_test_jl  = jl.DataFrame(df_test)
 
-    param = jl.HTBparam(
+    # quantile loss at 0.5 = median regression, mathematically identical to MAE minimisation
+    htb_kwargs = dict(
         loss        = ht_loss,
         modality    = HT_MODALITY,
         ntrees      = HT_NTREES,
@@ -119,6 +120,9 @@ def _fit_htboost(X_train, y_train, X_test, feature_names, ht_loss, purge_weeks=0
         verbose     = "Off",
         warnings    = "Off",
     )
+    if ht_loss == "quantile":
+        htb_kwargs["coeff"] = [0.5]
+    param = jl.HTBparam(**htb_kwargs)
 
     data   = jl.HTBdata(np.array(y_train, dtype=np.float64), x_train_jl, param)
     output = jl.HTBfit(data, param)
