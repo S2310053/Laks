@@ -277,6 +277,9 @@ for loss_fn in LOSS_FNS:
             "Predicted": hold_preds,
         }).to_csv(f"{RESULTS_DIR}/holdout_preds_{safe_name}.csv", index=False)
 
+        pd.DataFrame(shap_vals, columns=ALL_FEAT, index=hold_data["Date"].values)\
+            .to_csv(f"{RESULTS_DIR}/shap_over_time_{safe_name}.csv")
+
         # Summary of results per horizon
         summary.append({
             "Y":             target,
@@ -363,6 +366,44 @@ for loss_fn in LOSS_FNS:
         )
         plt.tight_layout()
         plt.savefig(f"{RESULTS_DIR}/{safe_name}_shap.pdf", format="pdf", bbox_inches="tight")
+        plt.close()
+
+        # SHAP over time — Panel 1: signed SHAP values, Panel 2: rolling mean |SHAP|
+        TOP_N    = 20
+        roll_wks = 8
+        top_feats = mean_shap.head(TOP_N).index.tolist()
+        shap_df   = pd.DataFrame(shap_vals, columns=ALL_FEAT,
+                                 index=pd.to_datetime(hold_data["Date"].values))
+        shap_top  = shap_df[top_feats]
+
+        fig, axes = plt.subplots(2, 1, figsize=(14, 10), facecolor="white")
+        fig.suptitle(
+            f"SHAP Over Time  —  CatBoost [{loss_fn}]  |  {target}"
+            f"{'  [NOWCAST]' if is_nowcast else ''}\n"
+            f"Top {TOP_N} features by mean |SHAP|  |  Holdout 2022–2025",
+            fontsize=11, fontweight="bold",
+        )
+
+        ax = axes[0]
+        for feat in top_feats:
+            ax.plot(shap_top.index, shap_top[feat], lw=1.0, alpha=0.8, label=feat)
+        ax.axhline(0, color=_GREY, lw=0.8, ls="--")
+        ax.set_title("Signed SHAP values over time  (positive = pushes prediction up)", fontsize=10)
+        ax.legend(frameon=False, fontsize=7, loc="upper left",
+                  bbox_to_anchor=(1.01, 1), borderaxespad=0)
+        _style_ax(ax, ylabel="SHAP value")
+
+        ax = axes[1]
+        for feat in top_feats:
+            rolling = shap_top[feat].abs().rolling(roll_wks, min_periods=1).mean()
+            ax.plot(shap_top.index, rolling, lw=1.0, alpha=0.8, label=feat)
+        ax.set_title(f"{roll_wks}-week rolling mean |SHAP|  (feature importance over time)", fontsize=10)
+        ax.legend(frameon=False, fontsize=7, loc="upper left",
+                  bbox_to_anchor=(1.01, 1), borderaxespad=0)
+        _style_ax(ax, ylabel="|SHAP| rolling mean")
+
+        plt.tight_layout()
+        plt.savefig(f"{RESULTS_DIR}/{safe_name}_shap_over_time.pdf", format="pdf", bbox_inches="tight")
         plt.close()
 
     #Summary table
