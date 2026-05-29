@@ -861,7 +861,7 @@ class DataLoader:
 
         # Create continuous weekly calendar, starting 4 weeks before 2000-01-05 to account for publication lags (Warm up rows are trimmed inside _lagByPublication)
         start = pd.Timestamp("1999-12-08")
-        end   = pd.Timestamp("2026-04-01")
+        end   = pd.Timestamp("2026-04-08")
 
         calendar = pd.DataFrame({
             "Date": pd.date_range(start=start, end=end, freq="W-WED")
