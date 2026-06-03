@@ -39,16 +39,20 @@ _GREY = "dimgrey"
 RESULTS_DIR = "Results/Application"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
-# Weekly spot log returns — the realised return series all participants act on
-df1w   = pd.read_csv("Results/HTBoost/RMSE/holdout_preds_Y_1w_∆_Salmon_(NOK-KG).csv",
+# Realised weekly return the decision can actually time: a choice at week t (knowing last
+# week's published price P_{t-1}) is between selling now at P_t and holding to P_{t+1}, so it
+# realises dln[t+1]. We take the clean non-overlapping weekly return Y 0w (= dln[t]) and shift
+# it -1 so row t carries dln[t+1]. Signal stays at t → no look-ahead, no overlap.
+df0w   = pd.read_csv("Results/HTBoost/RMSE/holdout_preds_Y_0w_∆_Salmon_(NOK-KG).csv",
                      parse_dates=["Date"]).dropna().sort_values("Date").reset_index(drop=True)
-r1wRef = df1w.set_index("Date")["Actual"]
+r1wRef = df0w.set_index("Date")["Actual"].shift(-1).dropna()  # drop last week (no next-week return)
 
-# Best model per horizon (lowest holdout RMSE)
+# Best model per horizon selected on cross-validated (pre-holdout) forecast performance,
+# so the model choice is independent of the 2022-2026 holdout used to evaluate the strategy
 HORIZONS = {
     "1w":  {"path": "Results/HTBoost/RMSE/holdout_preds_Y_1w_∆_Salmon_(NOK-KG).csv",  "model": "HTBoost", "label": "h = 1w"},
     "2w":  {"path": "Results/HTBoost/RMSE/holdout_preds_Y_2w_∆_Salmon_(NOK-KG).csv",  "model": "HTBoost", "label": "h = 2w"},
-    "1m":  {"path": "Results/CatBoost/RMSE/holdout_preds_Y_1m_∆_Salmon_(NOK-KG).csv", "model": "CatBoost","label": "h = 1m"},
+    "1m":  {"path": "Results/OLS/holdout_preds_Y_1m_∆_Salmon_(NOK-KG).csv",           "model": "OLS",     "label": "h = 1m"},
     "3m":  {"path": "Results/OLS/holdout_preds_Y_3m_∆_Salmon_(NOK-KG).csv",           "model": "OLS",     "label": "h = 3m"},
     "6m":  {"path": "Results/OLS/holdout_preds_Y_6m_∆_Salmon_(NOK-KG).csv",           "model": "OLS",     "label": "h = 6m"},
     "12m": {"path": "Results/CatBoost/RMSE/holdout_preds_Y_12m_∆_Salmon_(NOK-KG).csv","model": "CatBoost","label": "h = 12m"},
@@ -86,6 +90,20 @@ def perDecisionStats(r):
     sr   = mean / sd if sd > 0 else 0.0
     return mean, sd, sr
 
+def newey_west_t(d):
+    # HAC (Bartlett-kernel) t-statistic for the mean of d against zero; lag by the standard rule
+    n = len(d); m = d.mean(); e = d - m
+    L = int(np.floor(4 * (n / 100) ** (2 / 9)))
+    lrv = np.mean(e * e)
+    for k in range(1, L + 1):
+        lrv += 2 * (1 - k / (L + 1)) * np.mean(e[k:] * e[:-k])
+    se = np.sqrt(lrv / n)
+    return m / se if se > 0 else 0.0
+
+# Model returns are reported net of a fixed one-way transaction cost charged on each position
+# change (turnover); the always-hold benchmark holds a constant position, so pays none.
+TC_BPS = 50
+
 def styleAx(ax):
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
@@ -104,41 +122,43 @@ for participant, cfg in PARTICIPANTS.items():
         axes = [axes]
     fig.suptitle(
         f"Revenue Timing — {participant}  ({ppy} decisions/year)\n"
-        f"Model-timed vs sell-at-spot | log returns per decision | Holdout 2022–2025",
+        f"Model-timed (net {{}}bp) vs always-hold | log returns per decision | Holdout 2022–2025".format(TC_BPS),
         fontsize=13, fontweight="bold"
     )
 
     for ax, h in zip(axes, cfg["horizons"]):
         dates, pred, ret = aggregate(loadPreds(h), freq)
         pos       = (pred > 0).astype(float)
-        modelRet  = pos * ret      # hold if forecast up, sell now (0) if forecast down
-        naiveRet  = ret            # sell at spot every decision (no model)
+        switches  = np.abs(np.diff(pos, prepend=0.0))             # 1 on every hold<->sell switch
+        modelRet  = pos * ret - (TC_BPS / 10000.0) * switches     # net of transaction costs
+        holdRet   = ret                                           # always hold every decision (no model)
 
         mM, sM, srM = perDecisionStats(modelRet)
-        mN, sN, srN = perDecisionStats(naiveRet)
-        n = len(ret)
+        mH, sH, srH = perDecisionStats(holdRet)
+        n    = len(ret)
+        tHAC = newey_west_t(modelRet - holdRet)                   # HAC t-stat on the model-vs-hold spread
 
         print(f"  {HORIZONS[h]['label']:8s} | n={n:>3} | "
-              f"Model:  mean={mM:+.3f} sd={sM:.3f} SR={srM:.2f} | "
-              f"Naive:  mean={mN:+.3f} sd={sN:.3f} SR={srN:.2f}")
+              f"Model(net {TC_BPS}bp): mean={mM:+.3f} sd={sM:.3f} SR={srM:.2f} | "
+              f"Hold: SR={srH:.2f} | t={tHAC:.2f}")
 
         summaryRows.append({
-            "Participant": participant, "Horizon": h, "Model": HORIZONS[h]["model"],
-            "Decisions_per_year": ppy, "n_periods": n,
+            "Participant": participant, "Horizon": h, "Model": HORIZONS[h]["model"], "n": n,
             "Mean_Model": mM, "SD_Model": sM, "SR_Model": srM,
-            "Mean_Naive": mN, "SD_Naive": sN, "SR_Naive": srN,
+            "Mean_Hold": mH, "SD_Hold": sH, "SR_Hold": srH,
+            "t_stat": tHAC,
         })
 
         pd.DataFrame({"Date": dates, "Pred": pred, "Ret_period": ret,
-                      "Position": pos, "Model_Ret": modelRet, "Naive_Ret": naiveRet,
-                      "Cum_Model": np.cumsum(modelRet), "Cum_Naive": np.cumsum(naiveRet)}
+                      "Position": pos, "Model_Ret": modelRet, "Hold_Ret": holdRet,
+                      "Cum_Model": np.cumsum(modelRet), "Cum_Hold": np.cumsum(holdRet)}
                      ).to_csv(f"{RESULTS_DIR}/strategy_{h}.csv", index=False)
 
         ax.plot(dates, np.cumsum(modelRet), label=f"{HORIZONS[h]['model']} (model-timed)", color=_BLUE, lw=1.5)
-        ax.plot(dates, np.cumsum(naiveRet), label="Sell at spot (no model)", color=_DARK, lw=1.2, ls="--", alpha=0.8)
+        ax.plot(dates, np.cumsum(holdRet), label="Always hold (no model)", color=_DARK, lw=1.2, ls="--", alpha=0.8)
         ax.axhline(0.0, color=_GREY, lw=0.8, ls=":")
         ax.set_title(f"{HORIZONS[h]['label']}  —  {HORIZONS[h]['model']}  |  "
-                     f"SR {srM:.2f} vs {srN:.2f}  (n={n})", fontsize=10, fontweight="bold")
+                     f"SR {srM:.2f} vs {srH:.2f}  (n={n})", fontsize=10, fontweight="bold")
         ax.legend(frameon=False, fontsize=9)
         styleAx(ax)
 
