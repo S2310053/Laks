@@ -75,7 +75,7 @@ HORIZON_ORDER = ["0w", "1w", "2w", "1m", "3m", "6m", "12m"]
 model_names   = list(loaded.keys())
 
 # Build comparison table
-# For each horizon of each model it extracts the following: Hold R², Hold Hit, Skill vs RW, DM p, CW p
+# For each horizon of each model it extracts the following: Hold R², Hold Hit, Skill vs RW, DM p, DM OLS p
 def _get(r, *keys):
     for k in keys:
         v = r.get(k)
@@ -90,7 +90,7 @@ for hz in HORIZON_ORDER:
         mask = df_m["Horizon"] == hz
         if mask.sum() == 0:
             for key in ("CV R²", "R²", "RMSE", "MAE", "RW RMSE", "Skill",
-                        "MAE Skill", "Hit", "DM p", "CW p"):
+                        "MAE Skill", "Hit", "DM p", "DM OLS p"):
                 row[f"{name} {key}"] = None
             continue
         r = df_m[mask].iloc[0]
@@ -109,7 +109,7 @@ for hz in HORIZON_ORDER:
         row[f"{name} MAE Skill"]= metrics.skill_score(hold_mae,  rw_mae)
         row[f"{name} Hit"]      = _get(r, "Hold Hit")
         row[f"{name} DM p"]     = _get(r, "Hold DM p")
-        row[f"{name} CW p"]     = _get(r, "Hold CW p")   # None for OLS/SARIMA
+        row[f"{name} DM OLS p"] = _get(r, "Hold DM OLS p")   # None for OLS/SARIMA
     rows.append(row)
 
 comp_df = pd.DataFrame(rows)
@@ -139,16 +139,25 @@ for name in model_names:
     disp_data[f"{name} R²"]       = [metrics.fmt(r.get(f"{name} R²"),       ".3f") for r in rows]
     disp_data[f"{name} Hit"]      = [_fmt_pct(r.get(f"{name} Hit"))          for r in rows]
     disp_data[f"{name} p(DM)"]    = [_fmt_p(r.get(f"{name} DM p"))           for r in rows]
-    disp_data[f"{name} p(CW)"]    = [_fmt_p(r.get(f"{name} CW p"))           for r in rows]
+    disp_data[f"{name} p(DM OLS)"] = [_fmt_p(r.get(f"{name} DM OLS p"))       for r in rows]
 
 disp = pd.DataFrame(disp_data)
 Plotter().results_table(
     disp,
     f"Model Comparison — Holdout 2022–2025  [{LOSS_VARIANT} loss variant]\n"
-    "RMSE, MAE, Skill vs RW, R², Hit Rate | DM = Harvey et al. (1997) vs RW | CW = Clark-West (2007) vs OLS",
+    "RMSE, MAE, Skill vs RW, R², Hit Rate | DM = Harvey et al. (1997) vs RW | DM OLS = Diebold-Mariano vs OLS",
     f"{RESULTS_DIR}/comparison_table.pdf",
     width=max(22, len(disp.columns) * 1.8),
 )
+
+# CatBoost and HTBoost predictions come from the selected LOSS_VARIANT subdirectory
+PRED_DIRS = {
+    "CatBoost": f"Results/CatBoost/{LOSS_VARIANT}",
+    "HTBoost":  f"Results/HTBoost/{LOSS_VARIANT}",
+    "Lasso":    "Results/Lasso",
+    "SARIMA":   "Results/SARIMA",
+    "OLS":      "Results/OLS",
+}
 
 # Bar chart: Holdout R² by horizon
 fig, axes = plt.subplots(4, 1, figsize=(14, 20), facecolor="white")
@@ -191,7 +200,37 @@ hit_vals = _bar_vals("Hit")
 for k, name in enumerate(model_names):
     ax.bar(x + k * width, [v * 100 for v in hit_vals[name]], width, label=name,
            color=COLORS.get(name, f"C{k}"), alpha=0.85)
-ax.axhline(50, color=_GREY, lw=1, ls="--", label="Random Walk (50%)")
+
+# Majority-class baseline per horizon (max of up/down proportions from holdout actuals)
+# Build horizon → target name mapping from loaded summaries for correct filename construction
+_hz_to_target = {}
+for df_m in loaded.values():
+    for _, _r in df_m.iterrows():
+        _hz = _r.get("Horizon")
+        _y  = _r.get("Y")
+        if _hz and _y and _hz not in _hz_to_target:
+            _hz_to_target[_hz] = _y
+
+majority_rates = []
+for hz in HORIZON_ORDER:
+    hz_actuals = []
+    target_name = _hz_to_target.get(hz)
+    if target_name:
+        safe_name_hz = target_name.replace("/", "-").replace(" ", "_")
+        for model_name, pred_dir in PRED_DIRS.items():
+            pred_file = f"{pred_dir}/holdout_preds_{safe_name_hz}.csv"
+            if os.path.exists(pred_file):
+                tmp = pd.read_csv(pred_file)
+                if "Actual" in tmp.columns:
+                    hz_actuals = tmp["Actual"].values
+                    break
+    if len(hz_actuals) > 0:
+        p_up = np.mean(hz_actuals > 0)
+        majority_rates.append(max(p_up, 1 - p_up) * 100)
+    else:
+        majority_rates.append(50.0)
+ax.plot(x + width * (len(model_names) - 1) / 2, majority_rates,
+        color="black", lw=1.2, ls="--", marker="o", ms=4, label="Majority-class baseline")
 ax.set_xticks(x + width * (len(model_names) - 1) / 2)
 ax.set_xticklabels(HORIZON_ORDER)
 ax.set_ylabel("Hit Rate (%)", fontweight="bold")
@@ -289,29 +328,20 @@ for name in model_names:
     rank_row_rmse[f"{name} R²"]      = "—"
     rank_row_rmse[f"{name} Hit"]     = "—"
     rank_row_rmse[f"{name} p(DM)"]   = "—"
-    rank_row_rmse[f"{name} p(CW)"]   = "—"
+    rank_row_rmse[f"{name} p(DM OLS)"] = "—"
     rank_row_rank[f"{name} RMSE"]    = str(next(i+1 for i, (n, _) in enumerate(ranking) if n == name))
     rank_row_rank[f"{name} MAE"]     = "—"
     rank_row_rank[f"{name} Skill%"]  = "—"
     rank_row_rank[f"{name} R²"]      = "—"
     rank_row_rank[f"{name} Hit"]     = "—"
     rank_row_rank[f"{name} p(DM)"]   = "—"
-    rank_row_rank[f"{name} p(CW)"]   = "—"
+    rank_row_rank[f"{name} p(DM OLS)"] = "—"
 
 disp = pd.concat([disp, pd.DataFrame([rank_row_rmse, rank_row_rank])], ignore_index=True)
 
 # Time-series comparison plots per horizon
 # Panel 1: Predicted vs Actual (all models + RW)
 # Panel 2: Cumulative Squared Error (lower = better)
-
-# CatBoost and HTBoost predictions come from the selected LOSS_VARIANT subdirectory
-PRED_DIRS = {
-    "CatBoost": f"Results/CatBoost/{LOSS_VARIANT}",
-    "HTBoost":  f"Results/HTBoost/{LOSS_VARIANT}",
-    "Lasso":    "Results/Lasso",
-    "SARIMA":   "Results/SARIMA",
-    "OLS":      "Results/OLS",
-}
 
 def _style_ax(ax, ylabel=""):
     ax.spines["top"].set_visible(False)

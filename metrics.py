@@ -48,17 +48,18 @@ class Metrics:
         return (1 - hold_rmse / rw_rmse) * 100
 
     # Diebold-Mariano test with Harvey, Leybourne & Newbold (1997) small-sample correction.
-    # H0: equal predictive accuracy vs RW (predicts zero for log-return targets)
-    # H1: model beats RW (one-sided)
+    # H0: equal predictive accuracy vs benchmark
+    # H1: model beats benchmark (one-sided)
+    # benchmark_pred: pass None to compare vs RW (predicts zero); pass predictions to compare vs any benchmark (e.g. OLS)
     # Correction factor sqrt((n+1-2h+h(h-1)/n)/n) adjusts for finite-sample bias;
     # p-value drawn from t(n-1) rather than N(0,1) — Harvey et al. (1997)
-    def diebold_mariano(self, actual, pred, horizon=1):
+    def diebold_mariano(self, actual, pred, horizon=1, benchmark_pred=None):
         n       = len(actual)
         e_model = actual - pred
-        e_rw    = actual          # RW predicts zero
+        e_bench = actual if benchmark_pred is None else (actual - np.asarray(benchmark_pred))
 
-        # Squared-error loss differential: positive means model beats RW
-        d       = e_rw ** 2 - e_model ** 2
+        # Squared-error loss differential: positive means model beats benchmark
+        d       = e_bench ** 2 - e_model ** 2
         d_mean  = np.mean(d)
 
         # Newey-West HAC variance with Bartlett weights (bandwidth = h-1)
@@ -80,7 +81,7 @@ class Metrics:
         hlr_factor = np.sqrt((n + 1 - 2 * horizon + horizon * (horizon - 1) / n) / n)
         dm_star    = hlr_factor * dm_stat
 
-        # One-sided p-value from t(n-1): H1 = model beats RW
+        # One-sided p-value from t(n-1): H1 = model beats benchmark
         p_value = stats.t.sf(dm_star, df=n - 1)
         return dm_star, p_value
 

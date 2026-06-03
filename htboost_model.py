@@ -2,7 +2,7 @@
 
 ##
 # We construct the HTBoost (Hybrid Tree Boosting) model per Y horizon, using the same purged k-fold CV setup as CatBoost
-# HTBoost (Giordani, 2025) enhances gradient boosting by applying nonlinear transformations to tree fitted values,
+# HTBoost (Mella, L.) enhances gradient boosting by applying nonlinear transformations to tree fitted values,
 # making it more data-efficient for smooth relationships — relevant for seasonal salmon price dynamics
 # HTBoost handles NaN internally and auto-tunes tree depth via its own internal CV
 # The model is implemented in Julia and accessed via the juliacall Python-Julia bridge
@@ -55,15 +55,15 @@ df = pd.read_csv("Data/Factors.csv", parse_dates=["Date"])
 
 # Final test set: 01-22 to 04-26
 HOLDOUT_START = "2022-01-01"
-OLS_RESULTS   = "Results/OLS"          # for Clark-West vs OLS benchmark
+OLS_RESULTS   = "Results/OLS"          # for DM vs OLS benchmark
 
 # Identify Y columns and features
 Y_COLS   = [c for c in df.columns if c.startswith("Y ")]
 NON_FEAT = {"Date"} | set(Y_COLS)
 ALL_FEAT = [c for c in df.columns if c not in NON_FEAT]
 
-# CW test only for horizons where OLS forward benchmark exists
-CW_HORIZONS = {"1m", "3m", "6m", "12m"}
+# DM vs OLS only for horizons where forward contracts exist
+DM_OLS_HORIZONS = {"1m", "3m", "6m", "12m"}
 
 # Same horizon/fold structure as CatBoost for comparability
 HORIZON_CONFIG = {
@@ -248,9 +248,9 @@ for ht_loss, loss_label in LOSS_FNS:
         hold_hitrate  = metrics.hit_rate(hold_actuals, hold_preds)
         dm_stat, dm_p = metrics.diebold_mariano(hold_actuals, hold_preds, horizon=max(purge_wks, 1))
 
-        # Clark-West test vs OLS benchmark (only for horizons with forward contracts)
-        cw_stat, cw_p = None, None
-        if horizon in CW_HORIZONS:
+        # DM test vs OLS benchmark (only for horizons where forward contracts exist)
+        dm_ols_stat, dm_ols_p = None, None
+        if horizon in DM_OLS_HORIZONS:
             safe_name_ols = target.replace("/", "-").replace(" ", "_")
             ols_csv = f"{OLS_RESULTS}/holdout_preds_{safe_name_ols}.csv"
             if os.path.exists(ols_csv):
@@ -264,7 +264,7 @@ for ht_loss, loss_label in LOSS_FNS:
                     ols_df[["Date", "Predicted"]].rename(columns={"Predicted": "OLS_Pred"}),
                     on="Date", how="inner")
                 if len(merged) >= 10:
-                    cw_stat, cw_p = metrics.clark_west(
+                    dm_ols_stat, dm_ols_p = metrics.diebold_mariano(
                         merged["Actual"].values, merged["Pred"].values,
                         horizon=max(purge_wks, 1),
                         benchmark_pred=merged["OLS_Pred"].values)
@@ -273,7 +273,7 @@ for ht_loss, loss_label in LOSS_FNS:
         print(f"  Holdout  RMSE={hold_rmse:.4f}  MAE={hold_mae:.4f}  RW_RMSE={hold_rw_rmse:.4f}  "
               f"R²={hold_r2:.4f}  Hit={hold_hitrate:.1%}  "
               f"DM={dm_stat:.2f}  p={dm_p:.3f}  (depth={final_depth}, ntrees={final_ntrees})"
-              + (f"  CW={cw_stat:.2f}  p={cw_p:.3f}" if cw_stat is not None else ""))
+              + (f"  DM_OLS={dm_ols_stat:.2f}  p={dm_ols_p:.3f}" if dm_ols_stat is not None else ""))
 
         # Save holdout predictions for model comparison plots
         safe_name = target.replace("/", "-").replace(" ", "_")
@@ -305,8 +305,8 @@ for ht_loss, loss_label in LOSS_FNS:
             "Hold Hit":      hold_hitrate,
             "Hold DM":       dm_stat,
             "Hold DM p":     dm_p,
-            "Hold CW":       cw_stat,
-            "Hold CW p":     cw_p,
+            "Hold DM OLS":   dm_ols_stat,
+            "Hold DM OLS p": dm_ols_p,
             "Depth":         final_depth,
             "nTrees":        final_ntrees,
             "n_train":       len(cv_data),
@@ -325,6 +325,11 @@ for ht_loss, loss_label in LOSS_FNS:
             print(f"  Top 10 features (HTBrelevance):")
             for feat, score in importance.head(10).items():
                 print(f"    {score:6.2f}  {feat}")
+
+            # Save feature importance to CSV
+            imp_df = pd.DataFrame({"Feature": importance.index, "Importance": importance.values})
+            imp_df.insert(0, "Horizon", horizon)
+            imp_df.to_csv(f"{RESULTS_DIR}/feature_importance_{safe_name}.csv", index=False)
         except Exception as e:
             print(f"  Feature importance failed: {e}")
             importance = pd.Series(dtype=float)
@@ -349,8 +354,8 @@ for ht_loss, loss_label in LOSS_FNS:
 
         _hold_title = (f"Holdout 2022–2025 — RMSE={hold_rmse:.4f}  MAE={hold_mae:.4f}  |  "
                        f"R²={hold_r2:.4f}  |  DM p={dm_p:.3f}")
-        if cw_stat is not None:
-            _hold_title += f"  |  CW p={cw_p:.3f}"
+        if dm_ols_stat is not None:
+            _hold_title += f"  |  DM_OLS p={dm_ols_p:.3f}"
         axes[ax_idx].plot(hold_data["Date"].values, hold_actuals, label="Actual",    color=_DARK, lw=1.5, alpha=0.85)
         axes[ax_idx].plot(hold_data["Date"].values, hold_preds,   label="Predicted", color=_BLUE, lw=1.2, alpha=0.85)
         axes[ax_idx].axhline(0, color=_GREY, lw=0.8, ls="--", label="Random Walk")
@@ -399,9 +404,9 @@ for ht_loss, loss_label in LOSS_FNS:
         "DM":         [metrics.fmt(r["Hold DM"], ".2f") for r in summary],
         "p(DM)":      [f'{r["Hold DM p"]:.4f}' if r["Hold DM p"] >= 0.001
                        else "< 0.001" for r in summary],
-        "CW":         [metrics.fmt(r["Hold CW"], ".2f") for r in summary],
-        "p(CW)":      [f'{r["Hold CW p"]:.4f}' if r["Hold CW p"] is not None and r["Hold CW p"] >= 0.001
-                       else ("< 0.001" if r["Hold CW p"] is not None else "—") for r in summary],
+        "DM OLS":     [metrics.fmt(r["Hold DM OLS"], ".2f") for r in summary],
+        "p(DM OLS)":  [f'{r["Hold DM OLS p"]:.4f}' if r["Hold DM OLS p"] is not None and r["Hold DM OLS p"] >= 0.001
+                       else ("< 0.001" if r["Hold DM OLS p"] is not None else "—") for r in summary],
         "Depth":      [r["Depth"] for r in summary],
     })
 
@@ -409,7 +414,7 @@ for ht_loss, loss_label in LOSS_FNS:
         disp,
         f"HTBoost [{loss_label}] — Results Summary\n"
         f"Holdout: 2022–2026 | Purged CV | Depth auto-tuned | "
-        f"DM = Harvey et al. (1997) vs RW | CW = Clark-West (2007) vs OLS",
+        f"DM = Harvey et al. (1997) vs RW | DM OLS = Diebold-Mariano vs OLS",
         f"{RESULTS_DIR}/htboost_results.pdf",
         width=24,
     )

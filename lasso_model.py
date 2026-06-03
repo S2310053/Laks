@@ -60,8 +60,8 @@ ALL_FEAT = [c for c in df.columns if c not in NON_FEAT]
 RESULTS_DIR = "Results/Lasso"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
-# CW test only for horizons where OLS forward benchmark exists
-CW_HORIZONS = {"1m", "3m", "6m", "12m"}
+# DM vs OLS only for horizons where forward contracts exist
+DM_OLS_HORIZONS = {"1m", "3m", "6m", "12m"}
 
 # Same structure as OLS to get results comparison with CatBoost for CV splits, as well as final holdout period
 HORIZON_CONFIG = {
@@ -234,9 +234,9 @@ for target in Y_COLS:
     n_nonzero_final = int(np.sum(final_model.coef_ != 0))
     best_alpha      = final_model.alpha_
 
-    # Clark-West test vs OLS benchmark (only for horizons with forward contracts)
-    cw_stat, cw_p = None, None
-    if horizon in CW_HORIZONS:
+    # DM test vs OLS benchmark (only for horizons where forward contracts exist)
+    dm_ols_stat, dm_ols_p = None, None
+    if horizon in DM_OLS_HORIZONS:
         safe_name_ols = target.replace("/", "-").replace(" ", "_")
         ols_csv = f"{OLS_RESULTS}/holdout_preds_{safe_name_ols}.csv"
         if os.path.exists(ols_csv):
@@ -246,7 +246,7 @@ for target in Y_COLS:
                 ols_df[["Date", "Predicted"]].rename(columns={"Predicted": "OLS_Pred"}),
                 on="Date", how="inner")
             if len(merged) >= 10:
-                cw_stat, cw_p = metrics.clark_west(
+                dm_ols_stat, dm_ols_p = metrics.diebold_mariano(
                     merged["Actual"].values, merged["Pred"].values,
                     horizon=max(purge_wks, 1),
                     benchmark_pred=merged["OLS_Pred"].values)
@@ -254,7 +254,7 @@ for target in Y_COLS:
     print(f"Holdout RMSE={hold_rmse:.4f}  MAE={hold_mae:.4f}  RW_RMSE={hold_rw_rmse:.4f}  "
           f"R²={hold_r2:.4f}  Hit={hold_hitrate:.1%}  "
           f"DM={dm_stat:.2f}  p={dm_p:.3f}"
-          + (f"  CW={cw_stat:.2f}  p={cw_p:.3f}" if cw_stat is not None else ""))
+          + (f"  DM_OLS={dm_ols_stat:.2f}  p={dm_ols_p:.3f}" if dm_ols_stat is not None else ""))
 
     # Save holdout predictions for model comparison plots
     pd.DataFrame({
@@ -284,8 +284,8 @@ for target in Y_COLS:
         "Hold Hit":       hold_hitrate,
         "Hold DM":        dm_stat,
         "Hold DM p":      dm_p,
-        "Hold CW":        cw_stat,
-        "Hold CW p":      cw_p,
+        "Hold DM OLS":    dm_ols_stat,
+        "Hold DM OLS p":  dm_ols_p,
         "Best Alpha":     best_alpha,
         "Nonzero Coefs":  n_nonzero_final,
         "Total Features": len(final_model.coef_),
@@ -317,8 +317,8 @@ for target in Y_COLS:
 
     _hold_title = (f"Holdout 2022–2025 — RMSE={hold_rmse:.4f}  MAE={hold_mae:.4f}  |  "
                    f"R²={hold_r2:.4f}  | DM p={dm_p:.3f}  | α={best_alpha:.5f}")
-    if cw_stat is not None:
-        _hold_title += f"  | CW p={cw_p:.3f}"
+    if dm_ols_stat is not None:
+        _hold_title += f"  | DM_OLS p={dm_ols_p:.3f}"
     axes[ax_idx].plot(hold_dates, hold_actuals, label="Actual",    color=_DARK, lw=1.5, alpha=0.85)
     axes[ax_idx].plot(hold_dates, hold_preds,   label="Predicted", color=_BLUE, lw=1.2, alpha=0.85)
     axes[ax_idx].axhline(0, color=_GREY, lw=0.8, ls="--", label="Random Walk")
@@ -371,16 +371,16 @@ disp = pd.DataFrame({
     "DM":         [metrics.fmt(r["Hold DM"], ".2f") for r in summary],
     "p(DM)":      [f'{r["Hold DM p"]:.4f}' if r["Hold DM p"] >= 0.001
                    else "< 0.001" for r in summary],
-    "CW":         [metrics.fmt(r["Hold CW"], ".2f") for r in summary],
-    "p(CW)":      [f'{r["Hold CW p"]:.4f}' if r["Hold CW p"] is not None and r["Hold CW p"] >= 0.001
-                   else ("< 0.001" if r["Hold CW p"] is not None else "—") for r in summary],
+    "DM OLS":     [metrics.fmt(r["Hold DM OLS"], ".2f") for r in summary],
+    "p(DM OLS)":  [f'{r["Hold DM OLS p"]:.4f}' if r["Hold DM OLS p"] is not None and r["Hold DM OLS p"] >= 0.001
+                   else ("< 0.001" if r["Hold DM OLS p"] is not None else "—") for r in summary],
     "α":          [f'{r["Best Alpha"]:.5f}' for r in summary],
     "Nonzero":    [f'{r["Nonzero Coefs"]}/{r["Total Features"]}' for r in summary],
 })
 
 Plotter().results_table(
     disp,
-    "Lasso — Results Summary\nHoldout: 2022–2025 | Purged CV | LassoCV | DM = Harvey et al. (1997) vs RW | CW = Clark-West (2007) vs OLS",
+    "Lasso — Results Summary\nHoldout: 2022–2025 | Purged CV | LassoCV | DM = Harvey et al. (1997) vs RW | DM OLS = Diebold-Mariano vs OLS",
     f"{RESULTS_DIR}/lasso_results.pdf",
     width=24,
 )

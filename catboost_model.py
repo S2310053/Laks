@@ -54,8 +54,8 @@ Y_COLS   = [c for c in df.columns if c.startswith("Y ")]
 NON_FEAT = {"Date"} | set(Y_COLS)
 ALL_FEAT = [c for c in df.columns if c not in NON_FEAT]
 
-# CW test only for horizons where OLS forward benchmark exists
-CW_HORIZONS = {"1m", "3m", "6m", "12m"}
+# DM vs OLS only for horizons where forward contracts exist
+DM_OLS_HORIZONS = {"1m", "3m", "6m", "12m"}
 
 # Defines purge_weeks, n_folds, and tree depth per horizon
 # Purge_weeks is the number of weeks to exclude between train and test sets in CV to prevent leakage (= horizon length)
@@ -235,9 +235,9 @@ for loss_fn in LOSS_FNS:
         hold_hitrate  = metrics.hit_rate(hold_actuals, hold_preds)
         dm_stat, dm_p = metrics.diebold_mariano(hold_actuals, hold_preds, horizon=max(purge_wks, 1))
 
-        # Clark-West test vs OLS benchmark (only for horizons with forward contracts)
-        cw_stat, cw_p = None, None
-        if horizon in CW_HORIZONS:
+        # DM test vs OLS benchmark (only for horizons where forward contracts exist)
+        dm_ols_stat, dm_ols_p = None, None
+        if horizon in DM_OLS_HORIZONS:
             safe_name_ols = target.replace("/", "-").replace(" ", "_")
             ols_csv = f"{OLS_RESULTS}/holdout_preds_{safe_name_ols}.csv"
             if os.path.exists(ols_csv):
@@ -251,7 +251,7 @@ for loss_fn in LOSS_FNS:
                     ols_df[["Date", "Predicted"]].rename(columns={"Predicted": "OLS_Pred"}),
                     on="Date", how="inner")
                 if len(merged) >= 10:
-                    cw_stat, cw_p = metrics.clark_west(
+                    dm_ols_stat, dm_ols_p = metrics.diebold_mariano(
                         merged["Actual"].values, merged["Pred"].values,
                         horizon=max(purge_wks, 1),
                         benchmark_pred=merged["OLS_Pred"].values)
@@ -267,9 +267,10 @@ for loss_fn in LOSS_FNS:
         print(f"  Holdout  RMSE={hold_rmse:.4f}  MAE={hold_mae:.4f}  RW_RMSE={hold_rw_rmse:.4f}  "
               f"R²={hold_r2:.4f}  Hit={hold_hitrate:.1%}  "
               f"DM={dm_stat:.2f}  p={dm_p:.3f}"
-              + (f"  CW={cw_stat:.2f}  p={cw_p:.3f}" if cw_stat is not None else ""))
+              + (f"  DM_OLS={dm_ols_stat:.2f}  p={dm_ols_p:.3f}" if dm_ols_stat is not None else ""))
 
-        # Save holdout predictions for model comparison and CW test in other models
+        # Save holdout predictions for model comparison
+
         safe_name = target.replace("/", "-").replace(" ", "_")
         pd.DataFrame({
             "Date": hold_data["Date"].values,
@@ -277,8 +278,12 @@ for loss_fn in LOSS_FNS:
             "Predicted": hold_preds,
         }).to_csv(f"{RESULTS_DIR}/holdout_preds_{safe_name}.csv", index=False)
 
+        # Save SHAP values — raw (signed, per observation) and mean |SHAP| importance
         pd.DataFrame(shap_vals, columns=ALL_FEAT, index=hold_data["Date"].values)\
             .to_csv(f"{RESULTS_DIR}/shap_over_time_{safe_name}.csv")
+        shap_imp_df = pd.DataFrame({"Feature": mean_shap.index, "Importance": mean_shap.values})
+        shap_imp_df.insert(0, "Horizon", horizon)
+        shap_imp_df.to_csv(f"{RESULTS_DIR}/feature_importance_{safe_name}.csv", index=False)
 
         # Summary of results per horizon
         summary.append({
@@ -302,8 +307,8 @@ for loss_fn in LOSS_FNS:
             "Hold Hit":      hold_hitrate,
             "Hold DM":       dm_stat,
             "Hold DM p":     dm_p,
-            "Hold CW":       cw_stat,
-            "Hold CW p":     cw_p,
+            "Hold DM OLS":   dm_ols_stat,
+            "Hold DM OLS p": dm_ols_p,
             "Depth":         depth,
             "n_train":       len(cv_data),
             "n_holdout":     len(hold_data),
@@ -335,8 +340,8 @@ for loss_fn in LOSS_FNS:
 
         _hold_title = (f"Holdout 2022–2025 — RMSE={hold_rmse:.4f}  MAE={hold_mae:.4f}  |  "
                        f"R²={hold_r2:.4f}  |  DM p={dm_p:.3f}")
-        if cw_stat is not None:
-            _hold_title += f"  |  CW p={cw_p:.3f}"
+        if dm_ols_stat is not None:
+            _hold_title += f"  |  DM_OLS p={dm_ols_p:.3f}"
         axes[ax_idx].plot(hold_data["Date"].values, hold_actuals, label="Actual",    color=_DARK, lw=1.5, alpha=0.85)
         axes[ax_idx].plot(hold_data["Date"].values, hold_preds,   label="Predicted", color=_BLUE, lw=1.2, alpha=0.85)
         axes[ax_idx].axhline(0, color=_GREY, lw=0.8, ls="--", label="Random Walk")
@@ -429,9 +434,9 @@ for loss_fn in LOSS_FNS:
         "DM":         [metrics.fmt(r["Hold DM"], ".2f") for r in summary],
         "p(DM)":      [f'{r["Hold DM p"]:.4f}' if r["Hold DM p"] >= 0.001
                        else "< 0.001" for r in summary],
-        "CW":         [metrics.fmt(r["Hold CW"], ".2f") for r in summary],
-        "p(CW)":      [f'{r["Hold CW p"]:.4f}' if r["Hold CW p"] is not None and r["Hold CW p"] >= 0.001
-                       else ("< 0.001" if r["Hold CW p"] is not None else "—") for r in summary],
+        "DM OLS":     [metrics.fmt(r["Hold DM OLS"], ".2f") for r in summary],
+        "p(DM OLS)":  [f'{r["Hold DM OLS p"]:.4f}' if r["Hold DM OLS p"] is not None and r["Hold DM OLS p"] >= 0.001
+                       else ("< 0.001" if r["Hold DM OLS p"] is not None else "—") for r in summary],
         "Depth":      [r["Depth"] for r in summary],
     })
 
@@ -439,7 +444,7 @@ for loss_fn in LOSS_FNS:
         disp,
         f"CatBoost [{loss_fn}] — Results Summary\n"
         f"Holdout: 2022–2026 | Purged CV | Depth CV'd over {{2,...,9}} | "
-        f"DM = Harvey et al. (1997) vs RW | CW = Clark-West (2007) vs OLS",
+        f"DM = Harvey et al. (1997) vs RW | DM OLS = Diebold-Mariano vs OLS",
         f"{RESULTS_DIR}/catboost_results.pdf",
         width=24,
     )
