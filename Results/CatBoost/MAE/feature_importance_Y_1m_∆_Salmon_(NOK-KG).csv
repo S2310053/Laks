@@ -97,15 +97,15 @@ Horizon,Feature,Importance
 1m,∆ FWD 12m,9.958823207436258e-05
 1m,Acc 1m,7.879375133729214e-05
 1m,∆ Chilean Exports 1w,5.24210633375833e-05
-1m,Acc 1w,0.0
 1m,∆ Export Volume 1w,0.0
+1m,Acc 1w,0.0
+1m,Lice Outbreak 3m,0.0
 1m,Month_01,0.0
-1m,Month_02,0.0
 1m,Month_03,0.0
+1m,Month_02,0.0
 1m,Month_04,0.0
 1m,Month_05,0.0
-1m,Month_06,0.0
 1m,Month_07,0.0
+1m,Month_06,0.0
 1m,Month_09,0.0
 1m,Month_10,0.0
-1m,Lice Outbreak 3m,0.0

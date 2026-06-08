@@ -38,74 +38,74 @@ Horizon,Feature,Importance
 6m,Smolt Release 11m Monthly,0.0003315460030779331
 6m,Lice Outbreak 3m,0.00012024566041394959
 6m,Brent FWD Slope,0.00011756057408553499
-6m,∆ Shrimp Price (Global) 1m Monthly,0.0
-6m,∆ Shrimp Price (Global) 6m Monthly,0.0
-6m,∆ Shrimp Price (Global) 12m Monthly,0.0
-6m,Month_09,0.0
-6m,Month_08,0.0
-6m,Month_07,0.0
-6m,Month_06,0.0
-6m,∆ Broiler Price (EU) 2w,0.0
-6m,∆ Broiler Price (EU) 1m,0.0
-6m,CPI NO Monthly,0.0
-6m,Month_10,0.0
-6m,∆ Broiler Price (EU) 3m,0.0
+6m,∆ Salmon (NOK/KG) 1w,0.0
+6m,∆ Salmon (NOK/KG) 2w,0.0
+6m,∆ Spread (FP - SSB),0.0
+6m,FWD 1m,0.0
+6m,∆ Salmon (NOK/KG) 3m,0.0
+6m,∆ Salmon (NOK/KG) 6m,0.0
+6m,∆ Salmon (NOK/KG) 12m,0.0
+6m,Smolt Release 8m Monthly,0.0
+6m,Smolt Release 6m Monthly,0.0
+6m,Smolt Release 5m Monthly,0.0
+6m,Smolt Release 4m Monthly,0.0
+6m,Loss Rate 6m Monthly,0.0
+6m,Smolt Release 3m Monthly,0.0
+6m,Loss Rate 1m Monthly,0.0
+6m,Loss Rate 3m Monthly,0.0
+6m,∆ FWD 12m,0.0
+6m,∆ Export Volume 1w,0.0
+6m,∆ Export Volume 2w,0.0
+6m,∆ Export Volume 1m,0.0
+6m,∆ Chilean Exports 1w,0.0
+6m,∆ Chilean Exports 2w,0.0
+6m,∆ Chilean Exports 1m,0.0
+6m,∆ Chilean Exports 3m,0.0
+6m,∆ FWD 1m,0.0
+6m,∆ FWD 6m,0.0
+6m,∆ FWD 3m,0.0
+6m,∆ Salmon (NOK/KG) 1m,0.0
+6m,RVol 4w,0.0
+6m,Acc 1w,0.0
+6m,Smolt Release 17m Monthly,0.0
+6m,Lice Outbreak 1m,0.0
+6m,∆ EURNOK 2w,0.0
+6m,Sea Temp 12m Avg,0.0
+6m,∆ EURNOK,0.0
+6m,Smolt Release 16m Monthly,0.0
+6m,Smolt Release 12m Monthly,0.0
+6m,Lice Outbreak,0.0
+6m,∆ EURNOK 1w,0.0
+6m,Sea Temp,0.0
 6m,∆ Broiler Price (EU) 1w,0.0
-6m,∆ Fishmeal 1m Monthly,0.0
-6m,Month_05,0.0
+6m,∆ Shrimp Price (Global) 12m Monthly,0.0
+6m,∆ Shrimp Price (Global) 6m Monthly,0.0
+6m,∆ Shrimp Price (Global) 1m Monthly,0.0
+6m,CPI NO Monthly,0.0
+6m,∆ Broiler Price (EU) 1m,0.0
+6m,∆ Broiler Price (EU) 12m,0.0
+6m,∆ Broiler Price (EU) 2w,0.0
+6m,∆ Pig Price (EU) 2w,0.0
+6m,∆ Pig Price (EU) 1w,0.0
+6m,∆ Pig Price (EU),0.0
+6m,∆ Pig Price (EU) 1m,0.0
+6m,∆ Pig Price (EU) 12m,0.0
 6m,∆ Pig Price (EU) 6m,0.0
+6m,∆ Broiler Price (EU) 3m,0.0
+6m,∆ Broiler Price (EU) 6m,0.0
+6m,∆ Fishmeal 1m Monthly,0.0
+6m,∆ Pig Price (EU) 3m,0.0
 6m,Brent FWD Curvature,0.0
 6m,Soybean FWD Slope,0.0
 6m,Soybean FWD Curvature,0.0
 6m,Month_01,0.0
 6m,Month_02,0.0
-6m,∆ Pig Price (EU) 12m,0.0
-6m,∆ Pig Price (EU) 3m,0.0
-6m,∆ Broiler Price (EU) 12m,0.0
 6m,Month_03,0.0
-6m,∆ Pig Price (EU) 1m,0.0
-6m,∆ Pig Price (EU) 2w,0.0
-6m,∆ Pig Price (EU) 1w,0.0
-6m,∆ Pig Price (EU),0.0
 6m,Month_04,0.0
-6m,∆ Broiler Price (EU) 6m,0.0
-6m,∆ Salmon (NOK/KG) 1w,0.0
-6m,∆ EURNOK 2w,0.0
-6m,∆ FWD 1m,0.0
-6m,∆ Chilean Exports 1w,0.0
-6m,∆ Export Volume 1m,0.0
-6m,∆ Export Volume 2w,0.0
-6m,∆ Export Volume 1w,0.0
-6m,∆ FWD 12m,0.0
-6m,∆ FWD 6m,0.0
-6m,∆ FWD 3m,0.0
-6m,FWD 1m,0.0
-6m,∆ Chilean Exports 1m,0.0
-6m,∆ Spread (FP - SSB),0.0
-6m,RVol 4w,0.0
-6m,Acc 1w,0.0
-6m,∆ Salmon (NOK/KG) 12m,0.0
-6m,∆ Salmon (NOK/KG) 6m,0.0
-6m,∆ Salmon (NOK/KG) 3m,0.0
-6m,∆ Salmon (NOK/KG) 1m,0.0
-6m,∆ Chilean Exports 2w,0.0
-6m,∆ Chilean Exports 3m,0.0
-6m,∆ EURNOK 1w,0.0
-6m,Smolt Release 16m Monthly,0.0
-6m,∆ EURNOK,0.0
-6m,Sea Temp 12m Avg,0.0
-6m,Sea Temp,0.0
-6m,Lice Outbreak 1m,0.0
-6m,Lice Outbreak,0.0
-6m,∆ Salmon (NOK/KG) 2w,0.0
-6m,Smolt Release 17m Monthly,0.0
-6m,Smolt Release 12m Monthly,0.0
-6m,Loss Rate 1m Monthly,0.0
-6m,Smolt Release 8m Monthly,0.0
-6m,Smolt Release 6m Monthly,0.0
-6m,Smolt Release 5m Monthly,0.0
-6m,Smolt Release 4m Monthly,0.0
-6m,Smolt Release 3m Monthly,0.0
-6m,Loss Rate 6m Monthly,0.0
-6m,Loss Rate 3m Monthly,0.0
+6m,Month_05,0.0
+6m,Month_06,0.0
+6m,Month_07,0.0
+6m,Month_08,0.0
+6m,Month_09,0.0
+6m,Month_10,0.0
 6m,Month_11,0.0

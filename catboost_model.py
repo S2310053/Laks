@@ -281,6 +281,16 @@ for loss_fn in LOSS_FNS:
         # Save SHAP values — raw (signed, per observation) and mean |SHAP| importance
         pd.DataFrame(shap_vals, columns=ALL_FEAT, index=hold_data["Date"].values)\
             .to_csv(f"{RESULTS_DIR}/shap_over_time_{safe_name}.csv")
+
+        # Self-contained beeswarm data: one row per (Date, Feature) with the SHAP value
+        # (dot position) and the raw feature value (dot colour) — reproduces the beeswarm
+        _bee_shap = pd.DataFrame(shap_vals, columns=ALL_FEAT, index=hold_data["Date"].values)\
+                      .rename_axis("Date").reset_index().melt(id_vars="Date", var_name="Feature", value_name="SHAP")
+        _bee_val  = pd.DataFrame(hold_data[ALL_FEAT].values, columns=ALL_FEAT, index=hold_data["Date"].values)\
+                      .rename_axis("Date").reset_index().melt(id_vars="Date", var_name="Feature", value_name="Value")
+        _bee_shap.merge(_bee_val, on=["Date", "Feature"])\
+                 .to_csv(f"{RESULTS_DIR}/shap_beeswarm_{safe_name}.csv", index=False)
+
         shap_imp_df = pd.DataFrame({"Feature": mean_shap.index, "Importance": mean_shap.values})
         shap_imp_df.insert(0, "Horizon", horizon)
         shap_imp_df.to_csv(f"{RESULTS_DIR}/feature_importance_{safe_name}.csv", index=False)

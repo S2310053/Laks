@@ -88,24 +88,24 @@ Horizon,Feature,Importance
 1w,NIBOR 3m,2.8628194692113086e-05
 1w,Soybean FWD Slope,2.4925655454456125e-05
 1w,∆YOY Total Biomass Monthly,2.2843882821832166e-05
-1w,∆ Salmon (NOK/KG) 1m,0.0
-1w,Month_08,0.0
-1w,Month_07,0.0
-1w,Month_01,0.0
-1w,Month_06,0.0
-1w,Month_05,0.0
-1w,Month_10,0.0
-1w,Month_04,0.0
-1w,Month_03,0.0
-1w,Month_02,0.0
-1w,∆ Broiler Price (EU) 6m,0.0
 1w,∆ Spread (FP - SSB),0.0
-1w,∆ Pig Price (EU),0.0
-1w,Harvest Intensity 3m Monthly,0.0
 1w,Smolt Release 2m Monthly,0.0
-1w,∆ Fishmeal 1m Monthly,0.0
-1w,Lice Outbreak,0.0
+1w,Harvest Intensity 3m Monthly,0.0
+1w,∆ Salmon (NOK/KG) 1m,0.0
 1w,Lice Outbreak 3m,0.0
 1w,∆ Shrimp Price (Global) 3m Monthly,0.0
 1w,∆ Shrimp Price (Global) 6m Monthly,0.0
+1w,Lice Outbreak,0.0
+1w,∆ Broiler Price (EU) 6m,0.0
+1w,∆ Fishmeal 1m Monthly,0.0
+1w,∆ Pig Price (EU),0.0
+1w,Month_02,0.0
+1w,Month_01,0.0
+1w,Month_03,0.0
+1w,Month_04,0.0
+1w,Month_06,0.0
+1w,Month_05,0.0
+1w,Month_07,0.0
+1w,Month_08,0.0
+1w,Month_10,0.0
 1w,Month_11,0.0

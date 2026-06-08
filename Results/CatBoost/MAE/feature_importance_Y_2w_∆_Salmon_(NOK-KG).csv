@@ -82,30 +82,30 @@ Horizon,Feature,Importance
 2w,Soybean FWD Curvature,4.523369386051358e-05
 2w,∆ Fishmeal 1m Monthly,3.855721837808225e-05
 2w,Smolt Release 7m Monthly,1.6761480278904464e-05
-2w,Acc 1w,0.0
-2w,Month_06,0.0
-2w,Month_10,0.0
 2w,Acc 1m,0.0
-2w,Month_05,0.0
-2w,Month_07,0.0
+2w,Acc 1w,0.0
+2w,RVol 52w,0.0
+2w,∆ Chilean Exports 1m,0.0
+2w,∆ Chilean Exports 2w,0.0
+2w,∆ Chilean Exports 3m,0.0
+2w,∆ Salmon (NOK/KG) 12m,0.0
+2w,RVol 13w,0.0
+2w,∆ EURNOK 2w,0.0
+2w,ISA Outbreak,0.0
+2w,Lice Outbreak,0.0
+2w,∆ Shrimp Price (Global) 6m Monthly,0.0
+2w,NIBOR 3m,0.0
+2w,∆ EURNOK 1m,0.0
+2w,∆ EURNOK 3m,0.0
+2w,∆ Broiler Price (EU) 1m,0.0
+2w,∆ Broiler Price (EU) 6m,0.0
+2w,∆ Broiler Price (EU) 3m,0.0
 2w,Month_02,0.0
 2w,Month_03,0.0
 2w,Month_04,0.0
+2w,Month_06,0.0
+2w,Month_05,0.0
+2w,Month_07,0.0
 2w,Month_09,0.0
-2w,∆ Salmon (NOK/KG) 12m,0.0
-2w,∆ Chilean Exports 1m,0.0
-2w,RVol 13w,0.0
-2w,RVol 52w,0.0
-2w,∆ Chilean Exports 2w,0.0
-2w,Lice Outbreak,0.0
-2w,∆ Chilean Exports 3m,0.0
-2w,∆ Broiler Price (EU) 6m,0.0
-2w,∆ Broiler Price (EU) 3m,0.0
-2w,∆ Broiler Price (EU) 1m,0.0
-2w,∆ Shrimp Price (Global) 6m Monthly,0.0
-2w,NIBOR 3m,0.0
-2w,∆ EURNOK 3m,0.0
-2w,∆ EURNOK 1m,0.0
-2w,∆ EURNOK 2w,0.0
-2w,ISA Outbreak,0.0
+2w,Month_10,0.0
 2w,Month_11,0.0

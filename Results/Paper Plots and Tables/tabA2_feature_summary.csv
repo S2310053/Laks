@@ -1,0 +1,111 @@
+﻿Category,Feature,Freq,N,% NaN,Mean,Std,Min,Max,Skewness,Ex. Kurt
+Price Dynamics,∆ Salmon (NOK/KG) 1w,Weekly,1055,0.2,0.0012,0.0669,-0.5468,0.3615,-0.303,4.843
+Price Dynamics,∆ Salmon (NOK/KG) 2w,Weekly,1054,0.3,0.0013,0.0497,-0.2757,0.2229,-0.088,1.384
+Price Dynamics,∆ Salmon (NOK/KG) 1m,Weekly,1052,0.5,0.0012,0.0316,-0.1235,0.1071,-0.098,0.433
+Price Dynamics,∆ Salmon (NOK/KG) 3m,Weekly,1043,1.3,0.0011,0.0173,-0.0469,0.05,-0.16,-0.24
+Price Dynamics,∆ Salmon (NOK/KG) 6m,Weekly,1030,2.6,0.0009,0.0108,-0.0319,0.0313,-0.109,-0.383
+Price Dynamics,∆ Salmon (NOK/KG) 12m,Weekly,1004,5.0,0.0009,0.0049,-0.0139,0.0124,-0.243,-0.092
+Price Dynamics,Acc 1w,Weekly,1054,0.3,-0.0001,0.0898,-0.5424,0.9083,0.67,11.076
+Price Dynamics,Acc 1m,Weekly,1048,0.9,0.0001,0.0454,-0.2007,0.1971,-0.224,0.64
+Price Dynamics,RVol 4w,Weekly,1052,0.5,0.059,0.0342,0.0044,0.3818,3.207,23.93
+Price Dynamics,RVol 13w,Weekly,1043,1.3,0.0635,0.0224,0.0205,0.2013,2.704,13.967
+Price Dynamics,RVol 52w,Weekly,1004,5.0,0.0662,0.0132,0.0433,0.1162,1.725,4.271
+Price Dynamics,Spread (FP - SSB),Weekly,1056,0.1,-0.5364,2.7486,-14.58,17.21,1.474,7.356
+Price Dynamics,∆ Spread (FP - SSB),Weekly,1055,0.2,0.0016,1.6251,-15.9,13.17,-0.832,17.756
+Biological Supply Fundamentals,∆ Total Biomass Monthly,Monthly,244,0.0,0.0031,0.0425,-0.0846,0.1252,0.55,-0.353
+Biological Supply Fundamentals,∆YOY Total Biomass Monthly,Monthly,243,0.4,0.0465,0.06,-0.0605,0.2631,0.921,0.895
+Biological Supply Fundamentals,Avg Weight (KG) Monthly,Monthly,244,0.0,1.8114,0.1561,1.3307,2.1137,-0.569,0.095
+Biological Supply Fundamentals,YOY Avg Weight (KG) Monthly,Monthly,243,0.4,0.0055,0.0471,-0.1212,0.1147,0.007,-0.476
+Biological Supply Fundamentals,Harvest Intensity 1m Monthly,Monthly,244,0.0,0.1456,0.0192,0.1032,0.2041,0.554,0.315
+Biological Supply Fundamentals,Harvest Intensity 3m Monthly,Monthly,244,0.0,0.146,0.0149,0.1107,0.1948,0.867,0.946
+Biological Supply Fundamentals,Loss Rate 1m Monthly,Monthly,244,0.0,0.0112,0.0032,0.0055,0.0308,1.568,6.261
+Biological Supply Fundamentals,Loss Rate 3m Monthly,Monthly,244,0.0,0.0112,0.0022,0.0065,0.0181,0.346,0.068
+Biological Supply Fundamentals,Loss Rate 6m Monthly,Monthly,244,0.0,0.0112,0.0016,0.0072,0.0161,-0.002,-0.078
+Biological Supply Fundamentals,Smolt Release 2m Monthly,Monthly,244,0.0,16.3843,1.3848,8.7948,18.1344,-1.592,3.602
+Biological Supply Fundamentals,Smolt Release 3m Monthly,Monthly,244,0.0,16.3798,1.3856,8.7948,18.1344,-1.58,3.566
+Biological Supply Fundamentals,Smolt Release 4m Monthly,Monthly,244,0.0,16.3723,1.3862,8.7948,18.1344,-1.564,3.521
+Biological Supply Fundamentals,Smolt Release 5m Monthly,Monthly,244,0.0,16.3722,1.3862,8.7948,18.1344,-1.564,3.521
+Biological Supply Fundamentals,Smolt Release 6m Monthly,Monthly,244,0.0,16.373,1.3868,8.7948,18.1344,-1.563,3.514
+Biological Supply Fundamentals,Smolt Release 7m Monthly,Monthly,244,0.0,16.3707,1.3855,8.7948,18.1344,-1.564,3.527
+Biological Supply Fundamentals,Smolt Release 8m Monthly,Monthly,244,0.0,16.3596,1.3911,8.7948,18.1344,-1.534,3.392
+Biological Supply Fundamentals,Smolt Release 9m Monthly,Monthly,244,0.0,16.3451,1.4029,8.7948,18.1344,-1.502,3.192
+Biological Supply Fundamentals,Smolt Release 10m Monthly,Monthly,244,0.0,16.3277,1.4118,8.7948,18.1344,-1.475,3.027
+Biological Supply Fundamentals,Smolt Release 11m Monthly,Monthly,244,0.0,16.3127,1.4224,8.7948,18.1344,-1.444,2.852
+Biological Supply Fundamentals,Smolt Release 12m Monthly,Monthly,243,0.4,16.3158,1.4246,8.7948,18.1344,-1.449,2.853
+Biological Supply Fundamentals,Smolt Release 13m Monthly,Monthly,242,0.8,16.3289,1.4127,8.7948,18.1344,-1.472,3.026
+Biological Supply Fundamentals,Smolt Release 14m Monthly,Monthly,241,1.2,16.3323,1.4146,8.7948,18.1344,-1.479,3.032
+Biological Supply Fundamentals,Smolt Release 15m Monthly,Monthly,240,1.6,16.33,1.4171,8.7948,18.1344,-1.473,3.005
+Biological Supply Fundamentals,Smolt Release 16m Monthly,Monthly,239,2.0,16.3282,1.4198,8.7948,18.1344,-1.467,2.977
+Biological Supply Fundamentals,Smolt Release 17m Monthly,Monthly,238,2.5,16.3244,1.4216,8.7948,18.1344,-1.461,2.956
+Biological Supply Fundamentals,Smolt Release 18m Monthly,Monthly,237,2.9,16.3204,1.4233,8.7948,18.1344,-1.454,2.937
+Biological Supply Fundamentals,ISA Outbreak,Weekly,821,22.3,9.9391,6.0228,0.0,24.0,0.353,-0.829
+Biological Supply Fundamentals,ISA Outbreak 1m,Weekly,817,22.7,9.94,5.9676,0.0,24.0,0.35,-0.845
+Biological Supply Fundamentals,ISA Outbreak 3m,Weekly,808,23.6,9.9532,5.8248,0.0,23.3846,0.317,-0.904
+Biological Supply Fundamentals,Lice Outbreak,Weekly,743,29.7,0.163,0.0603,0.0301,0.3914,0.684,0.818
+Biological Supply Fundamentals,Lice Outbreak 1m,Weekly,739,30.1,0.1627,0.0574,0.0311,0.3601,0.527,0.378
+Biological Supply Fundamentals,Lice Outbreak 3m,Weekly,730,30.9,0.1624,0.0501,0.0401,0.3173,0.574,0.31
+Biological Supply Fundamentals,Sea Temp,Weekly,743,29.7,9.0266,3.1645,3.6966,15.6791,0.258,-1.282
+Biological Supply Fundamentals,Sea Temp 12m Avg,Weekly,692,34.5,9.0688,0.295,8.112,9.7159,-0.789,1.847
+Export Flows,∆ Export Volume 1w,Weekly,1057,0.0,0.0004,0.1646,-1.2693,0.7283,-2.546,14.681
+Export Flows,∆ Export Volume 2w,Weekly,1057,0.0,0.0003,0.1066,-0.7119,0.492,-1.784,9.242
+Export Flows,∆ Export Volume 1m,Weekly,1057,0.0,0.0004,0.0563,-0.3148,0.2187,-1.262,4.367
+Export Flows,∆ Chilean Exports 1w,Weekly,1057,0.0,-0.0001,0.3315,-1.2475,1.9437,0.048,2.347
+Export Flows,∆ Chilean Exports 2w,Weekly,1057,0.0,-0.0002,0.189,-1.0213,0.8922,-0.041,3.091
+Export Flows,∆ Chilean Exports 1m,Weekly,1057,0.0,-0.0001,0.097,-0.5033,0.3973,-0.173,2.056
+Export Flows,∆ Chilean Exports 3m,Weekly,1057,0.0,0.0003,0.0413,-0.1227,0.1589,-0.011,0.403
+Protein Substitutes,∆ Shrimp Price (Global) 1m Monthly,Monthly,244,0.0,0.0005,0.0483,-0.1675,0.1329,-0.489,1.263
+Protein Substitutes,∆ Shrimp Price (Global) 3m Monthly,Monthly,244,0.0,0.0023,0.0269,-0.0858,0.0707,-0.271,0.334
+Protein Substitutes,∆ Shrimp Price (Global) 6m Monthly,Monthly,244,0.0,0.0022,0.0173,-0.0476,0.0482,0.31,0.166
+Protein Substitutes,∆ Shrimp Price (Global) 12m Monthly,Monthly,244,0.0,0.0022,0.0108,-0.0257,0.038,0.437,0.761
+Protein Substitutes,∆ Broiler Price (EU) 1w,Weekly,742,29.8,0.0016,0.0203,-0.0944,0.1732,1.199,9.761
+Protein Substitutes,∆ Broiler Price (EU) 2w,Weekly,741,29.9,0.0016,0.0162,-0.0808,0.1486,1.225,11.475
+Protein Substitutes,∆ Broiler Price (EU) 1m,Weekly,739,30.1,0.0016,0.0116,-0.0539,0.0957,1.114,8.808
+Protein Substitutes,∆ Broiler Price (EU) 3m,Weekly,730,30.9,0.0017,0.0058,-0.0224,0.0329,0.623,2.425
+Protein Substitutes,∆ Broiler Price (EU) 6m,Weekly,717,32.2,0.0018,0.0034,-0.0108,0.0161,0.598,0.879
+Protein Substitutes,∆ Broiler Price (EU) 12m,Weekly,691,34.6,0.0019,0.0022,-0.0067,0.0094,0.323,0.621
+Protein Substitutes,∆ Pig Price (EU),Weekly,639,39.5,0.001,0.0316,-0.1639,0.2063,0.555,4.943
+Protein Substitutes,∆ Pig Price (EU) 1w,Weekly,638,39.6,0.0011,0.0244,-0.0982,0.1568,0.633,3.889
+Protein Substitutes,∆ Pig Price (EU) 2w,Weekly,637,39.7,0.0011,0.0209,-0.0864,0.1133,0.492,2.348
+Protein Substitutes,∆ Pig Price (EU) 1m,Weekly,635,39.9,0.001,0.0168,-0.0481,0.0934,0.586,1.751
+Protein Substitutes,∆ Pig Price (EU) 3m,Weekly,626,40.8,0.0011,0.0101,-0.0302,0.031,0.243,0.121
+Protein Substitutes,∆ Pig Price (EU) 6m,Weekly,613,42.0,0.0012,0.0073,-0.0236,0.0186,0.036,-0.111
+Protein Substitutes,∆ Pig Price (EU) 12m,Weekly,587,44.5,0.0014,0.0047,-0.0126,0.0155,0.43,0.071
+Protein Substitutes,Meat CPI (EU) Monthly,Monthly,244,0.0,2.725,3.0779,-0.7,15.6,2.354,6.517
+Monetary & Currency Conditions,∆ EURNOK,Weekly,1057,0.0,0.0003,0.0121,-0.0749,0.1204,1.108,12.818
+Monetary & Currency Conditions,∆ EURNOK 1w,Weekly,1057,0.0,0.0003,0.0121,-0.0749,0.1204,1.108,12.822
+Monetary & Currency Conditions,∆ EURNOK 2w,Weekly,1057,0.0,0.0003,0.0083,-0.0361,0.0891,1.602,14.678
+Monetary & Currency Conditions,∆ EURNOK 1m,Weekly,1057,0.0,0.0003,0.0057,-0.0254,0.0517,1.079,9.08
+Monetary & Currency Conditions,∆ EURNOK 3m,Weekly,1057,0.0,0.0004,0.0028,-0.0108,0.0159,0.911,3.051
+Monetary & Currency Conditions,∆ EURNOK 6m,Weekly,1057,0.0,0.0004,0.0017,-0.0056,0.0087,0.775,1.456
+Monetary & Currency Conditions,∆ EURNOK 12m,Weekly,1057,0.0,0.0004,0.0012,-0.0039,0.0046,0.158,0.075
+Monetary & Currency Conditions,CPI NO Monthly,Monthly,244,0.0,2.6201,1.4664,-0.3,7.5,0.981,1.196
+Monetary & Currency Conditions,NIBOR 3m,Weekly,1057,0.0,2.5258,1.6204,0.19,7.91,0.728,-0.372
+Seasonality,Month_01,Weekly,1057,0.0,0.088,0.2834,0.0,1.0,2.913,6.498
+Seasonality,Month_02,Weekly,1057,0.0,0.0804,0.2721,0.0,1.0,3.09,7.564
+Seasonality,Month_03,Weekly,1057,0.0,0.087,0.282,0.0,1.0,2.934,6.621
+Seasonality,Month_04,Weekly,1057,0.0,0.0823,0.275,0.0,1.0,3.044,7.279
+Seasonality,Month_05,Weekly,1057,0.0,0.0842,0.2778,0.0,1.0,2.999,7.007
+Seasonality,Month_06,Weekly,1057,0.0,0.0804,0.2721,0.0,1.0,3.09,7.564
+Seasonality,Month_07,Weekly,1057,0.0,0.0842,0.2778,0.0,1.0,2.999,7.007
+Seasonality,Month_08,Weekly,1057,0.0,0.0842,0.2778,0.0,1.0,2.999,7.007
+Seasonality,Month_09,Weekly,1057,0.0,0.0804,0.2721,0.0,1.0,3.09,7.564
+Seasonality,Month_10,Weekly,1057,0.0,0.0842,0.2778,0.0,1.0,2.999,7.007
+Seasonality,Month_11,Weekly,1057,0.0,0.0814,0.2735,0.0,1.0,3.067,7.42
+Forward Basis,FWD 1m,Weekly,1034,2.2,-0.0002,0.0954,-0.3432,0.4263,-0.084,0.436
+Forward Basis,∆ FWD 1m,Weekly,1033,2.3,0.0001,0.0695,-0.3181,0.5622,0.412,4.538
+Forward Basis,FWD 3m,Weekly,1033,2.3,0.004,0.156,-0.5239,0.4238,-0.21,-0.035
+Forward Basis,∆ FWD 3m,Weekly,1031,2.5,-0.0,0.0715,-0.3135,0.5468,0.234,3.91
+Forward Basis,FWD 6m,Weekly,1020,3.5,-0.0025,0.19,-0.4959,0.5813,0.162,-0.294
+Forward Basis,∆ FWD 6m,Weekly,1018,3.7,-0.0003,0.072,-0.3673,0.491,0.011,3.616
+Forward Basis,FWD 12m,Weekly,994,6.0,-0.0201,0.1429,-0.4627,0.4405,-0.021,0.053
+Forward Basis,∆ FWD 12m,Weekly,992,6.1,0.0001,0.0678,-0.3514,0.4976,0.205,3.6
+Forward Basis,FWD Slope,Weekly,994,6.0,-0.0198,0.1007,-0.3272,0.3943,0.414,1.118
+Forward Basis,FWD Curvature,Weekly,994,6.0,-0.0277,0.2468,-0.8231,0.6165,-0.45,0.751
+Production Input Costs,∆ Fishmeal 1m Monthly,Monthly,244,0.0,0.0084,0.0566,-0.1205,0.2921,0.731,2.345
+Production Input Costs,∆ Fishmeal 3m Monthly,Monthly,244,0.0,0.0054,0.036,-0.0909,0.1306,0.376,0.637
+Production Input Costs,∆ Fishmeal 6m Monthly,Monthly,244,0.0,0.0054,0.0259,-0.053,0.0625,0.163,-0.631
+Production Input Costs,∆ Fishmeal 12m Monthly,Monthly,244,0.0,0.0052,0.0182,-0.0315,0.0527,-0.055,-0.639
+Production Input Costs,Brent FWD Slope,Weekly,1057,0.0,0.0018,0.0869,-0.3079,0.5605,1.077,3.631
+Production Input Costs,Brent FWD Curvature,Weekly,1057,0.0,-0.0057,0.0265,-0.3145,0.175,-3.371,38.09
+Production Input Costs,Soybean FWD Slope,Weekly,1048,0.9,-0.0562,0.1107,-0.4443,0.1654,-0.641,-0.073
+Production Input Costs,Soybean FWD Curvature,Weekly,1048,0.9,0.0074,0.0716,-0.1689,0.2828,1.189,1.62
