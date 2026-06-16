@@ -1,0 +1,385 @@
+Horizon,Fold,Feature,Importance
+0w,1,FWD 1m,8.471449
+0w,1,Acc 1w,5.3837876
+0w,1,∆ Total Biomass Monthly,4.969154
+0w,1,∆ Export Volume 2w,4.814118
+0w,1,∆ Spread (FP - SSB),4.332662
+0w,1,Smolt Release 8m Monthly,3.707447
+0w,1,∆ Export Volume 1m,3.462644
+0w,1,YOY Avg Weight (KG) Monthly,3.0787716
+0w,1,Brent FWD Curvature,2.5744932
+0w,1,∆ FWD 12m,2.2781718
+0w,1,∆ EURNOK,2.2276323
+0w,1,∆ Salmon (NOK/KG) 12m,2.150409
+0w,1,∆ Broiler Price (EU) 3m,2.063528
+0w,1,Harvest Intensity 3m Monthly,2.0083613
+0w,1,∆ Salmon (NOK/KG) 1w,1.9834963
+0w,1,∆ Fishmeal 1m Monthly,1.9558038
+0w,1,FWD Curvature,1.9382448
+0w,1,CPI NO Monthly,1.8869983
+0w,1,∆ FWD 1m,1.820789
+0w,1,∆ EURNOK 3m,1.8118789
+0w,1,Sea Temp,1.7065573
+0w,1,ISA Outbreak 3m,1.6235094
+0w,1,Smolt Release 7m Monthly,1.592472
+0w,1,FWD Slope,1.5650316
+0w,1,∆ Broiler Price (EU) 6m,1.5384526
+0w,1,∆ Broiler Price (EU) 1m,1.486734
+0w,1,∆ Pig Price (EU) 1m,1.4708945
+0w,1,∆ Salmon (NOK/KG) 1m,1.4676397
+0w,1,∆ Shrimp Price (Global) 6m Monthly,1.4525962
+0w,1,ISA Outbreak,1.4344625
+0w,1,FWD 6m,1.4059261
+0w,1,∆ EURNOK 1w,1.3610419
+0w,1,∆ EURNOK 2w,1.3604274
+0w,1,∆ Salmon (NOK/KG) 6m,1.3033669
+0w,1,∆ Shrimp Price (Global) 12m Monthly,1.228739
+0w,1,∆ Chilean Exports 1m,1.096498
+0w,1,Smolt Release 13m Monthly,1.0774481
+0w,1,Sea Temp 12m Avg,1.0524714
+0w,1,∆ Broiler Price (EU) 2w,0.9430222
+0w,1,Smolt Release 17m Monthly,0.8791296
+0w,1,Loss Rate 3m Monthly,0.85314715
+0w,1,Soybean FWD Slope,0.8003303
+0w,1,Avg Weight (KG) Monthly,0.76870316
+0w,1,Month_07,0.76204544
+0w,1,∆YOY Total Biomass Monthly,0.7599387
+0w,1,∆ Export Volume 1w,0.70449525
+0w,1,Brent FWD Slope,0.6757305
+0w,1,∆ Fishmeal 3m Monthly,0.6627004
+0w,1,Smolt Release 5m Monthly,0.6568107
+0w,1,∆ Broiler Price (EU) 1w,0.6469582
+0w,1,∆ Pig Price (EU) 12m,0.64483774
+0w,1,∆ Shrimp Price (Global) 1m Monthly,0.6312253
+0w,1,Smolt Release 11m Monthly,0.62203676
+0w,1,Smolt Release 2m Monthly,0.49782836
+0w,1,Month_05,0.3469535
+0w,1,∆ Salmon (NOK/KG) 2w,0.0
+0w,1,∆ Salmon (NOK/KG) 3m,0.0
+0w,1,Acc 1m,0.0
+0w,1,RVol 4w,0.0
+0w,1,RVol 13w,0.0
+0w,1,RVol 52w,0.0
+0w,1,Spread (FP - SSB),0.0
+0w,1,FWD 3m,0.0
+0w,1,∆ FWD 3m,0.0
+0w,1,∆ FWD 6m,0.0
+0w,1,FWD 12m,0.0
+0w,1,∆ Chilean Exports 1w,0.0
+0w,1,∆ Chilean Exports 2w,0.0
+0w,1,∆ Chilean Exports 3m,0.0
+0w,1,Harvest Intensity 1m Monthly,0.0
+0w,1,Loss Rate 1m Monthly,0.0
+0w,1,Loss Rate 6m Monthly,0.0
+0w,1,Smolt Release 3m Monthly,0.0
+0w,1,Smolt Release 4m Monthly,0.0
+0w,1,Smolt Release 6m Monthly,0.0
+0w,1,Smolt Release 9m Monthly,0.0
+0w,1,Smolt Release 10m Monthly,0.0
+0w,1,Smolt Release 12m Monthly,0.0
+0w,1,Smolt Release 14m Monthly,0.0
+0w,1,Smolt Release 15m Monthly,0.0
+0w,1,Smolt Release 16m Monthly,0.0
+0w,1,Smolt Release 18m Monthly,0.0
+0w,1,ISA Outbreak 1m,0.0
+0w,1,Lice Outbreak,0.0
+0w,1,Lice Outbreak 1m,0.0
+0w,1,Lice Outbreak 3m,0.0
+0w,1,∆ EURNOK 1m,0.0
+0w,1,∆ EURNOK 6m,0.0
+0w,1,∆ EURNOK 12m,0.0
+0w,1,NIBOR 3m,0.0
+0w,1,∆ Shrimp Price (Global) 3m Monthly,0.0
+0w,1,∆ Broiler Price (EU) 12m,0.0
+0w,1,∆ Pig Price (EU),0.0
+0w,1,∆ Pig Price (EU) 1w,0.0
+0w,1,∆ Pig Price (EU) 2w,0.0
+0w,1,∆ Pig Price (EU) 3m,0.0
+0w,1,∆ Pig Price (EU) 6m,0.0
+0w,1,Meat CPI (EU) Monthly,0.0
+0w,1,∆ Fishmeal 6m Monthly,0.0
+0w,1,∆ Fishmeal 12m Monthly,0.0
+0w,1,Soybean FWD Curvature,0.0
+0w,1,Month_01,0.0
+0w,1,Month_02,0.0
+0w,1,Month_03,0.0
+0w,1,Month_04,0.0
+0w,1,Month_06,0.0
+0w,1,Month_08,0.0
+0w,1,Month_09,0.0
+0w,1,Month_10,0.0
+0w,1,Month_11,0.0
+0w,2,FWD 1m,20.103928
+0w,2,Acc 1w,13.962649
+0w,2,∆ Total Biomass Monthly,12.642443
+0w,2,FWD Slope,9.21313
+0w,2,∆ Spread (FP - SSB),6.4337254
+0w,2,RVol 13w,5.7848287
+0w,2,Soybean FWD Slope,4.125427
+0w,2,Smolt Release 12m Monthly,3.9392974
+0w,2,∆ Export Volume 2w,3.7818055
+0w,2,Brent FWD Slope,3.6583107
+0w,2,Smolt Release 8m Monthly,3.16537
+0w,2,∆ FWD 12m,3.1603653
+0w,2,Smolt Release 9m Monthly,2.8478851
+0w,2,YOY Avg Weight (KG) Monthly,2.5527537
+0w,2,∆ EURNOK 6m,2.0849922
+0w,2,Harvest Intensity 3m Monthly,1.505548
+0w,2,Month_01,1.0375415
+0w,2,∆ Salmon (NOK/KG) 1w,0.0
+0w,2,∆ Salmon (NOK/KG) 2w,0.0
+0w,2,∆ Salmon (NOK/KG) 1m,0.0
+0w,2,∆ Salmon (NOK/KG) 3m,0.0
+0w,2,∆ Salmon (NOK/KG) 6m,0.0
+0w,2,∆ Salmon (NOK/KG) 12m,0.0
+0w,2,Acc 1m,0.0
+0w,2,RVol 4w,0.0
+0w,2,RVol 52w,0.0
+0w,2,Spread (FP - SSB),0.0
+0w,2,∆ FWD 1m,0.0
+0w,2,FWD 3m,0.0
+0w,2,∆ FWD 3m,0.0
+0w,2,FWD 6m,0.0
+0w,2,∆ FWD 6m,0.0
+0w,2,FWD 12m,0.0
+0w,2,FWD Curvature,0.0
+0w,2,∆ Export Volume 1w,0.0
+0w,2,∆ Export Volume 1m,0.0
+0w,2,∆ Chilean Exports 1w,0.0
+0w,2,∆ Chilean Exports 2w,0.0
+0w,2,∆ Chilean Exports 1m,0.0
+0w,2,∆ Chilean Exports 3m,0.0
+0w,2,∆YOY Total Biomass Monthly,0.0
+0w,2,Avg Weight (KG) Monthly,0.0
+0w,2,Harvest Intensity 1m Monthly,0.0
+0w,2,Loss Rate 1m Monthly,0.0
+0w,2,Loss Rate 3m Monthly,0.0
+0w,2,Loss Rate 6m Monthly,0.0
+0w,2,Smolt Release 2m Monthly,0.0
+0w,2,Smolt Release 3m Monthly,0.0
+0w,2,Smolt Release 4m Monthly,0.0
+0w,2,Smolt Release 5m Monthly,0.0
+0w,2,Smolt Release 6m Monthly,0.0
+0w,2,Smolt Release 7m Monthly,0.0
+0w,2,Smolt Release 10m Monthly,0.0
+0w,2,Smolt Release 11m Monthly,0.0
+0w,2,Smolt Release 13m Monthly,0.0
+0w,2,Smolt Release 14m Monthly,0.0
+0w,2,Smolt Release 15m Monthly,0.0
+0w,2,Smolt Release 16m Monthly,0.0
+0w,2,Smolt Release 17m Monthly,0.0
+0w,2,Smolt Release 18m Monthly,0.0
+0w,2,ISA Outbreak,0.0
+0w,2,ISA Outbreak 1m,0.0
+0w,2,∆ EURNOK,0.0
+0w,2,∆ EURNOK 1w,0.0
+0w,2,∆ EURNOK 2w,0.0
+0w,2,∆ EURNOK 1m,0.0
+0w,2,∆ EURNOK 3m,0.0
+0w,2,∆ EURNOK 12m,0.0
+0w,2,CPI NO Monthly,0.0
+0w,2,NIBOR 3m,0.0
+0w,2,∆ Shrimp Price (Global) 1m Monthly,0.0
+0w,2,∆ Shrimp Price (Global) 3m Monthly,0.0
+0w,2,∆ Shrimp Price (Global) 6m Monthly,0.0
+0w,2,∆ Shrimp Price (Global) 12m Monthly,0.0
+0w,2,Meat CPI (EU) Monthly,0.0
+0w,2,∆ Fishmeal 1m Monthly,0.0
+0w,2,∆ Fishmeal 3m Monthly,0.0
+0w,2,∆ Fishmeal 6m Monthly,0.0
+0w,2,∆ Fishmeal 12m Monthly,0.0
+0w,2,Brent FWD Curvature,0.0
+0w,2,Soybean FWD Curvature,0.0
+0w,2,Month_02,0.0
+0w,2,Month_03,0.0
+0w,2,Month_04,0.0
+0w,2,Month_05,0.0
+0w,2,Month_06,0.0
+0w,2,Month_07,0.0
+0w,2,Month_08,0.0
+0w,2,Month_09,0.0
+0w,2,Month_10,0.0
+0w,2,Month_11,0.0
+0w,3,FWD 1m,15.498414
+0w,3,Acc 1w,6.897223
+0w,3,FWD Curvature,6.661756
+0w,3,∆ Salmon (NOK/KG) 1w,6.185238
+0w,3,RVol 52w,5.297017
+0w,3,∆ FWD 1m,4.7681923
+0w,3,∆ Total Biomass Monthly,3.9040427
+0w,3,∆ EURNOK 1m,3.750347
+0w,3,Smolt Release 8m Monthly,3.6249058
+0w,3,∆ Export Volume 1m,3.5054536
+0w,3,∆ Export Volume 2w,3.4640305
+0w,3,∆ Export Volume 1w,3.4387991
+0w,3,Smolt Release 9m Monthly,3.2707973
+0w,3,∆ Spread (FP - SSB),3.1094306
+0w,3,Soybean FWD Slope,3.0658994
+0w,3,NIBOR 3m,3.0599754
+0w,3,Acc 1m,3.03405
+0w,3,∆ Salmon (NOK/KG) 3m,2.9850528
+0w,3,∆YOY Total Biomass Monthly,2.7849827
+0w,3,Month_06,2.357189
+0w,3,Avg Weight (KG) Monthly,1.9873658
+0w,3,Month_04,1.7131286
+0w,3,∆ Fishmeal 1m Monthly,1.337957
+0w,3,Smolt Release 11m Monthly,1.292345
+0w,3,ISA Outbreak,1.0842527
+0w,3,Month_10,1.0392921
+0w,3,Month_07,0.8828568
+0w,3,∆ Salmon (NOK/KG) 2w,0.0
+0w,3,∆ Salmon (NOK/KG) 1m,0.0
+0w,3,∆ Salmon (NOK/KG) 6m,0.0
+0w,3,∆ Salmon (NOK/KG) 12m,0.0
+0w,3,RVol 4w,0.0
+0w,3,RVol 13w,0.0
+0w,3,Spread (FP - SSB),0.0
+0w,3,FWD 3m,0.0
+0w,3,∆ FWD 3m,0.0
+0w,3,FWD 6m,0.0
+0w,3,∆ FWD 6m,0.0
+0w,3,FWD 12m,0.0
+0w,3,∆ FWD 12m,0.0
+0w,3,FWD Slope,0.0
+0w,3,∆ Chilean Exports 1w,0.0
+0w,3,∆ Chilean Exports 2w,0.0
+0w,3,∆ Chilean Exports 1m,0.0
+0w,3,∆ Chilean Exports 3m,0.0
+0w,3,YOY Avg Weight (KG) Monthly,0.0
+0w,3,Harvest Intensity 1m Monthly,0.0
+0w,3,Harvest Intensity 3m Monthly,0.0
+0w,3,Loss Rate 1m Monthly,0.0
+0w,3,Loss Rate 3m Monthly,0.0
+0w,3,Loss Rate 6m Monthly,0.0
+0w,3,Smolt Release 2m Monthly,0.0
+0w,3,Smolt Release 3m Monthly,0.0
+0w,3,Smolt Release 4m Monthly,0.0
+0w,3,Smolt Release 5m Monthly,0.0
+0w,3,Smolt Release 6m Monthly,0.0
+0w,3,Smolt Release 7m Monthly,0.0
+0w,3,Smolt Release 10m Monthly,0.0
+0w,3,Smolt Release 12m Monthly,0.0
+0w,3,Smolt Release 13m Monthly,0.0
+0w,3,Smolt Release 14m Monthly,0.0
+0w,3,Smolt Release 15m Monthly,0.0
+0w,3,Smolt Release 16m Monthly,0.0
+0w,3,Smolt Release 17m Monthly,0.0
+0w,3,Smolt Release 18m Monthly,0.0
+0w,3,ISA Outbreak 1m,0.0
+0w,3,∆ EURNOK,0.0
+0w,3,∆ EURNOK 1w,0.0
+0w,3,∆ EURNOK 2w,0.0
+0w,3,∆ EURNOK 3m,0.0
+0w,3,∆ EURNOK 6m,0.0
+0w,3,∆ EURNOK 12m,0.0
+0w,3,CPI NO Monthly,0.0
+0w,3,∆ Shrimp Price (Global) 1m Monthly,0.0
+0w,3,∆ Shrimp Price (Global) 3m Monthly,0.0
+0w,3,∆ Shrimp Price (Global) 6m Monthly,0.0
+0w,3,∆ Shrimp Price (Global) 12m Monthly,0.0
+0w,3,Meat CPI (EU) Monthly,0.0
+0w,3,∆ Fishmeal 3m Monthly,0.0
+0w,3,∆ Fishmeal 6m Monthly,0.0
+0w,3,∆ Fishmeal 12m Monthly,0.0
+0w,3,Brent FWD Slope,0.0
+0w,3,Brent FWD Curvature,0.0
+0w,3,Soybean FWD Curvature,0.0
+0w,3,Month_01,0.0
+0w,3,Month_02,0.0
+0w,3,Month_03,0.0
+0w,3,Month_05,0.0
+0w,3,Month_08,0.0
+0w,3,Month_09,0.0
+0w,3,Month_11,0.0
+0w,4,FWD 1m,13.316114
+0w,4,NIBOR 3m,7.500725
+0w,4,Acc 1w,7.262888
+0w,4,∆ FWD 1m,7.2064004
+0w,4,∆ Salmon (NOK/KG) 1w,5.424791
+0w,4,∆ Total Biomass Monthly,5.308604
+0w,4,∆ EURNOK 1m,4.2571077
+0w,4,RVol 52w,4.151095
+0w,4,Smolt Release 12m Monthly,3.9678555
+0w,4,FWD 3m,3.8415077
+0w,4,∆ Export Volume 2w,3.8208425
+0w,4,∆ Shrimp Price (Global) 6m Monthly,3.8103182
+0w,4,∆ Salmon (NOK/KG) 1m,3.5653472
+0w,4,ISA Outbreak,3.5530772
+0w,4,RVol 13w,2.7062125
+0w,4,Smolt Release 10m Monthly,2.701727
+0w,4,Smolt Release 17m Monthly,2.5094182
+0w,4,Smolt Release 8m Monthly,2.4951255
+0w,4,∆ Export Volume 1m,2.3025043
+0w,4,∆ FWD 3m,2.2775474
+0w,4,∆ Chilean Exports 3m,1.6095929
+0w,4,Month_06,1.3738143
+0w,4,Smolt Release 13m Monthly,1.1998782
+0w,4,Smolt Release 5m Monthly,1.1732879
+0w,4,Soybean FWD Slope,1.0752215
+0w,4,Month_01,0.8695801
+0w,4,Month_11,0.71940476
+0w,4,∆ Salmon (NOK/KG) 2w,0.0
+0w,4,∆ Salmon (NOK/KG) 3m,0.0
+0w,4,∆ Salmon (NOK/KG) 6m,0.0
+0w,4,∆ Salmon (NOK/KG) 12m,0.0
+0w,4,Acc 1m,0.0
+0w,4,RVol 4w,0.0
+0w,4,Spread (FP - SSB),0.0
+0w,4,∆ Spread (FP - SSB),0.0
+0w,4,FWD 6m,0.0
+0w,4,∆ FWD 6m,0.0
+0w,4,FWD 12m,0.0
+0w,4,∆ FWD 12m,0.0
+0w,4,FWD Slope,0.0
+0w,4,FWD Curvature,0.0
+0w,4,∆ Export Volume 1w,0.0
+0w,4,∆ Chilean Exports 1w,0.0
+0w,4,∆ Chilean Exports 2w,0.0
+0w,4,∆ Chilean Exports 1m,0.0
+0w,4,∆YOY Total Biomass Monthly,0.0
+0w,4,Avg Weight (KG) Monthly,0.0
+0w,4,YOY Avg Weight (KG) Monthly,0.0
+0w,4,Harvest Intensity 1m Monthly,0.0
+0w,4,Harvest Intensity 3m Monthly,0.0
+0w,4,Loss Rate 1m Monthly,0.0
+0w,4,Loss Rate 3m Monthly,0.0
+0w,4,Loss Rate 6m Monthly,0.0
+0w,4,Smolt Release 2m Monthly,0.0
+0w,4,Smolt Release 3m Monthly,0.0
+0w,4,Smolt Release 4m Monthly,0.0
+0w,4,Smolt Release 6m Monthly,0.0
+0w,4,Smolt Release 7m Monthly,0.0
+0w,4,Smolt Release 9m Monthly,0.0
+0w,4,Smolt Release 11m Monthly,0.0
+0w,4,Smolt Release 14m Monthly,0.0
+0w,4,Smolt Release 15m Monthly,0.0
+0w,4,Smolt Release 16m Monthly,0.0
+0w,4,Smolt Release 18m Monthly,0.0
+0w,4,ISA Outbreak 1m,0.0
+0w,4,ISA Outbreak 3m,0.0
+0w,4,∆ EURNOK,0.0
+0w,4,∆ EURNOK 1w,0.0
+0w,4,∆ EURNOK 2w,0.0
+0w,4,∆ EURNOK 3m,0.0
+0w,4,∆ EURNOK 6m,0.0
+0w,4,∆ EURNOK 12m,0.0
+0w,4,CPI NO Monthly,0.0
+0w,4,∆ Shrimp Price (Global) 1m Monthly,0.0
+0w,4,∆ Shrimp Price (Global) 3m Monthly,0.0
+0w,4,∆ Shrimp Price (Global) 12m Monthly,0.0
+0w,4,Meat CPI (EU) Monthly,0.0
+0w,4,∆ Fishmeal 1m Monthly,0.0
+0w,4,∆ Fishmeal 3m Monthly,0.0
+0w,4,∆ Fishmeal 6m Monthly,0.0
+0w,4,∆ Fishmeal 12m Monthly,0.0
+0w,4,Brent FWD Slope,0.0
+0w,4,Brent FWD Curvature,0.0
+0w,4,Soybean FWD Curvature,0.0
+0w,4,Month_02,0.0
+0w,4,Month_03,0.0
+0w,4,Month_04,0.0
+0w,4,Month_05,0.0
+0w,4,Month_07,0.0
+0w,4,Month_08,0.0
+0w,4,Month_09,0.0
+0w,4,Month_10,0.0
