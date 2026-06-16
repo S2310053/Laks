@@ -133,8 +133,8 @@ for loss_fn in LOSS_FNS:
             sv  = model.get_feature_importance(
                       data=Pool(test[ALL_FEAT].values, feature_names=ALL_FEAT),
                       type="ShapValues")[:, :-1]      # drop trailing bias column
-            shap_frames.append(pd.DataFrame(sv, columns=ALL_FEAT, index=idx))
-            val_frames.append(pd.DataFrame(test[ALL_FEAT].values, columns=ALL_FEAT, index=idx))
+            shap_frames.append((spec["fold"], pd.DataFrame(sv, columns=ALL_FEAT, index=idx)))
+            val_frames.append((spec["fold"], pd.DataFrame(test[ALL_FEAT].values, columns=ALL_FEAT, index=idx)))
             rmse, rw = metrics.rmse(a, preds), metrics.rw_rmse(a)
             perfold_rows.append({
                 "Horizon": horizon, "Fold": spec["fold"],
@@ -161,22 +161,40 @@ for loss_fn in LOSS_FNS:
         # Same CSV schema as the holdout run (catboost_model.py) so paper_plots.py renders the
         # beeswarm / importance straight from the full-sample PKF with no plotting changes.
         if shap_frames:
-            shap_oos = pd.concat(shap_frames).sort_index()
-            val_oos  = pd.concat(val_frames).sort_index()
+            shap_oos = pd.concat([d for _, d in shap_frames]).sort_index()
+            val_oos  = pd.concat([d for _, d in val_frames]).sort_index()
+            # Date -> Fold map (folds partition the sample by date, every date in exactly one fold)
+            fold_of  = pd.concat([pd.Series(f, index=d.index) for f, d in shap_frames]).sort_index()
+
             shap_oos.rename_axis("Date").to_csv(f"{RESULTS_DIR}/shap_over_time_{_safe(target)}.csv")
 
+            # Beeswarm long: Date + Fold + Feature + SHAP + Value. paper_plots reads Feature/SHAP/Value;
+            # the extra Date + Fold let you build per-fold / per-regime beeswarms and persistence measures.
             bee_shap = shap_oos.rename_axis("Date").reset_index().melt(
                           id_vars="Date", var_name="Feature", value_name="SHAP")
             bee_val  = val_oos.rename_axis("Date").reset_index().melt(
                           id_vars="Date", var_name="Feature", value_name="Value")
-            bee_shap.merge(bee_val, on=["Date", "Feature"]).to_csv(
-                f"{RESULTS_DIR}/shap_beeswarm_{_safe(target)}.csv", index=False)
+            bee = bee_shap.merge(bee_val, on=["Date", "Feature"])
+            bee["Fold"] = bee["Date"].map(fold_of)
+            bee = bee[["Date", "Fold", "Feature", "SHAP", "Value"]]
+            bee.to_csv(f"{RESULTS_DIR}/shap_beeswarm_{_safe(target)}.csv", index=False)
 
+            # RAW per-fold importance (long) — mean|SHAP| within each fold; source for persistence
+            # measures (mean, std, rank-stability, fold-counts) without re-running.
+            perfold = pd.concat(
+                [pd.DataFrame({"Horizon": horizon, "Fold": f,
+                               "Feature": d.columns,
+                               "Importance": d.abs().mean().values})
+                 for f, d in shap_frames],
+                ignore_index=True)
+            perfold.to_csv(f"{RESULTS_DIR}/feature_importance_perfold_{_safe(target)}.csv", index=False)
+
+            # Pooled importance over all OOS obs (paper_plots schema)
             mean_shap = shap_oos.abs().mean().sort_values(ascending=False)
             imp_df = pd.DataFrame({"Feature": mean_shap.index, "Importance": mean_shap.values})
             imp_df.insert(0, "Horizon", horizon)
             imp_df.to_csv(f"{RESULTS_DIR}/feature_importance_{_safe(target)}.csv", index=False)
-            print(f"  SHAP pooled over {len(shap_oos)} OOS obs | top: "
+            print(f"  SHAP pooled over {len(shap_oos)} OOS obs ({len(shap_frames)} folds) | top: "
                   + ", ".join(mean_shap.head(3).index))
 
         a, p = pooled["Actual"].values, pooled["Predicted"].values

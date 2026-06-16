@@ -166,8 +166,8 @@ for ht_loss, loss_label in LOSS_FNS:
             # HTBrelevance on this fold's fitted model (same call as the holdout run)
             try:
                 _, _, fns_sorted, fi_sorted, _ = jl.HTBrelevance(ht_output, ht_data, verbose=False)
-                rel_frames.append(pd.Series(np.array(fi_sorted),
-                                            index=[str(f) for f in fns_sorted]))
+                rel_frames.append((spec["fold"], pd.Series(np.array(fi_sorted),
+                                            index=[str(f) for f in fns_sorted])))
             except Exception as e:
                 print(f"    [warn] HTBrelevance fold {spec['fold']} failed: {type(e).__name__}: {e}")
             rmse, rw = metrics.rmse(a, preds), metrics.rw_rmse(a)
@@ -196,11 +196,23 @@ for ht_loss, loss_label in LOSS_FNS:
         # "HTB Relevance" bar straight from the full-sample PKF. Features dropped in a fold
         # (>30% NaN) count as 0 relevance there, so the mean is over all folds.
         if rel_frames:
-            rel = pd.concat(rel_frames, axis=1).fillna(0.0).mean(axis=1).sort_values(ascending=False)
+            # RAW per-fold HTBrelevance — long format, one row per (fold, feature). This is the
+            # source the mean is computed from; saved so other measures (std, rank-persistence,
+            # fold-counts, etc.) can be derived later without re-fitting.
+            long = pd.concat(
+                [pd.DataFrame({"Horizon": horizon, "Fold": fold,
+                               "Feature": s.index, "Importance": s.values})
+                 for fold, s in rel_frames],
+                ignore_index=True)
+            long.to_csv(f"{RESULTS_DIR}/feature_importance_perfold_{_safe(target)}.csv", index=False)
+
+            # Averaged across folds (feature absent in a fold counts as 0) — schema paper_plots reads
+            wide = long.pivot(index="Feature", columns="Fold", values="Importance")
+            rel  = wide.fillna(0.0).mean(axis=1).sort_values(ascending=False)
             imp_df = pd.DataFrame({"Feature": rel.index, "Importance": rel.values})
             imp_df.insert(0, "Horizon", horizon)
             imp_df.to_csv(f"{RESULTS_DIR}/feature_importance_{_safe(target)}.csv", index=False)
-            print(f"  HTBrelevance pooled over {len(rel_frames)} folds | top: "
+            print(f"  HTBrelevance over {len(rel_frames)} folds | top: "
                   + ", ".join(rel.head(3).index))
 
         a, p = pooled["Actual"].values, pooled["Predicted"].values
