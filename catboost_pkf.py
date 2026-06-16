@@ -17,7 +17,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-from catboost import CatBoostRegressor
+from catboost import CatBoostRegressor, Pool
 from metrics import Metrics
 from plotter import Plotter
 matplotlib.use("Agg", force=True)
@@ -73,7 +73,7 @@ def _fit_predict(train, test, target, depth, loss_fn):
         eval_set=(val_inner[ALL_FEAT].values, val_inner[target].values),
         early_stopping_rounds=EARLY_STOP_ROUNDS,
     )
-    return model.predict(test[ALL_FEAT]), int(model.tree_count_)
+    return model.predict(test[ALL_FEAT]), int(model.tree_count_), model
 
 
 def _dm_vs_ols(pooled, target, h):
@@ -115,16 +115,26 @@ for loss_fn in LOSS_FNS:
 
         print(f"\n[{loss_fn}] {target}  (h={h}w, purge {left}/{right}w, depth={depth})")
         fold_results, perfold_rows = [], []
+        shap_frames, val_frames   = [], []   # per-fold OOS SHAP + raw feature values
         for spec in specs:
             tr_m, te_m = split_by_dates(data["Date"], spec)
             train, test = data[tr_m], data[te_m]
             if len(train) < 50 or len(test) == 0:
                 print(f"  fold {spec['fold']}: insufficient data")
                 continue
-            preds, ntrees = _fit_predict(train, test, target, depth, loss_fn)
+            preds, ntrees, model = _fit_predict(train, test, target, depth, loss_fn)
             a = test[target].values
             fold_results.append({"fold": spec["fold"], "dates": test["Date"].values,
                                  "actuals": a, "preds": preds})
+
+            # OOS SHAP on this fold's test block (same TreeSHAP recipe as the holdout run);
+            # every observation is scored by the fold model that never trained on it.
+            idx = pd.to_datetime(test["Date"].values)
+            sv  = model.get_feature_importance(
+                      data=Pool(test[ALL_FEAT].values, feature_names=ALL_FEAT),
+                      type="ShapValues")[:, :-1]      # drop trailing bias column
+            shap_frames.append(pd.DataFrame(sv, columns=ALL_FEAT, index=idx))
+            val_frames.append(pd.DataFrame(test[ALL_FEAT].values, columns=ALL_FEAT, index=idx))
             rmse, rw = metrics.rmse(a, preds), metrics.rw_rmse(a)
             perfold_rows.append({
                 "Horizon": horizon, "Fold": spec["fold"],
@@ -146,6 +156,29 @@ for loss_fn in LOSS_FNS:
 
         pooled = pool_fold_results(fold_results)
         pooled.to_csv(f"{RESULTS_DIR}/pooled_preds_{_safe(target)}.csv", index=False)
+
+        # ---- Pooled OOS SHAP (stacked across folds, date-sorted) ----
+        # Same CSV schema as the holdout run (catboost_model.py) so paper_plots.py renders the
+        # beeswarm / importance straight from the full-sample PKF with no plotting changes.
+        if shap_frames:
+            shap_oos = pd.concat(shap_frames).sort_index()
+            val_oos  = pd.concat(val_frames).sort_index()
+            shap_oos.rename_axis("Date").to_csv(f"{RESULTS_DIR}/shap_over_time_{_safe(target)}.csv")
+
+            bee_shap = shap_oos.rename_axis("Date").reset_index().melt(
+                          id_vars="Date", var_name="Feature", value_name="SHAP")
+            bee_val  = val_oos.rename_axis("Date").reset_index().melt(
+                          id_vars="Date", var_name="Feature", value_name="Value")
+            bee_shap.merge(bee_val, on=["Date", "Feature"]).to_csv(
+                f"{RESULTS_DIR}/shap_beeswarm_{_safe(target)}.csv", index=False)
+
+            mean_shap = shap_oos.abs().mean().sort_values(ascending=False)
+            imp_df = pd.DataFrame({"Feature": mean_shap.index, "Importance": mean_shap.values})
+            imp_df.insert(0, "Horizon", horizon)
+            imp_df.to_csv(f"{RESULTS_DIR}/feature_importance_{_safe(target)}.csv", index=False)
+            print(f"  SHAP pooled over {len(shap_oos)} OOS obs | top: "
+                  + ", ".join(mean_shap.head(3).index))
+
         a, p = pooled["Actual"].values, pooled["Predicted"].values
         pl_rmse, pl_rwrm = metrics.rmse(a, p), metrics.rw_rmse(a)
         pl_mae,  pl_rwmae = metrics.mae(a, p), metrics.rw_mae(a)

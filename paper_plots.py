@@ -822,6 +822,27 @@ def plot_r2_by_horizon():
     print(f"Saved → {path}")
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Table 5 — Diebold-Mariano p-values vs the OLS forward benchmark
+# ═══════════════════════════════════════════════════════════════════════════
+# One-sided DM test (H1: ML model beats OLS forward). Only horizons where a
+# forward contract / OLS benchmark exists (1m–12m).
+def table_dm_ols_pvalues():
+    src = os.path.join(BASE, "Results", "Comparison", "comparison_summary.csv")
+    d   = pd.read_csv(src)
+    d   = d[d["OLS RMSE"].notna()]          # OLS exists only at 1m–12m
+
+    ml  = ["CatBoost", "HTBoost", "Lasso"]
+    out = pd.DataFrame({"Horizon": d["Horizon"]})
+    for m in ml:
+        out[m] = d[f"{m} DM OLS p"].map(_fmt_p)
+
+    path = os.path.join(OUT, "tab5_dm_vs_ols.csv")
+    out.to_csv(path, index=False, encoding="utf-8-sig")
+    print(f"Saved → {path}")
+    return out
+
+
 if __name__ == "__main__":
     plot_timeseries()
     plot_distributions()
@@ -832,6 +853,7 @@ if __name__ == "__main__":
     table_dm_pvalues()
     table_ols_regression()
     table_oos_metrics()
+    table_dm_ols_pvalues()
     plot_r2_by_horizon()
     plot_feature_importance("0w", "RMSE", 10)
     plot_feature_importance("1w", "RMSE", 10)

@@ -73,10 +73,17 @@ def _style_ax(ax, ylabel=""):
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
 
 
-def _fit_htboost(X_train, y_train, X_test, feature_names, ht_loss, purge_weeks=0):
-    """Identical fitting recipe to htboost_model.py (proven to work)."""
+def _fit_htboost(X_train, y_train, X_test, feature_names, ht_loss, purge_weeks=0, nan_thresh=0.3):
+    """Identical fitting recipe to htboost_model.py (proven to work).
+    nan_thresh defaults to 0.3 → behaviour is exactly the holdout/other-machine recipe.
+    A fallback caller may pass nan_thresh>1 to keep ALL columns; this dodges a
+    HybridTreeBoosting bug on the SharedArray/@distributed path (some Windows setups) where
+    dropping columns desyncs the internal feature count and throws a BoundsError. HTBoost
+    handles NaN natively, so keeping all columns is safe for fitting."""
     nan_frac   = np.mean(np.isnan(X_train), axis=0)
-    valid_cols = nan_frac < 0.3
+    valid_cols = nan_frac < nan_thresh
+    if not valid_cols.any():                 # never hand HTBoost an empty matrix
+        valid_cols = nan_frac < 1.0
     feat_v     = [f for f, v in zip(feature_names, valid_cols) if v]
     df_train   = pd.DataFrame(X_train[:, valid_cols], columns=feat_v).astype(np.float64)
     df_test    = pd.DataFrame(X_test[:, valid_cols],  columns=feat_v).astype(np.float64)
@@ -94,7 +101,7 @@ def _fit_htboost(X_train, y_train, X_test, feature_names, ht_loss, purge_weeks=0
     preds  = np.array(jl.HTBpredict(x_test_jl, output))
     best_depth = int(output.bestvalue) if hasattr(output, "bestvalue") else -1
     ntrees     = int(output.ntrees)    if hasattr(output, "ntrees")    else -1
-    return preds, best_depth, ntrees
+    return preds, best_depth, ntrees, output, data
 
 
 def _dm_vs_ols(pooled, target, h):
@@ -126,6 +133,7 @@ for ht_loss, loss_label in LOSS_FNS:
 
         print(f"\n[{loss_label}] {target}  (h={h}w, purge {left}/{right}w)")
         fold_results, perfold_rows = [], []
+        rel_frames = []   # per-fold HTBrelevance (native permutation importance)
         for spec in specs:
             if SMOKE and spec["fold"] != 2:
                 continue
@@ -135,15 +143,33 @@ for ht_loss, loss_label in LOSS_FNS:
                 print(f"  fold {spec['fold']}: insufficient data")
                 continue
             try:
-                preds, depth, ntrees = _fit_htboost(
+                # Attempt 1 — the proven recipe (drops >30% NaN cols), works on the other machine
+                preds, depth, ntrees, ht_output, ht_data = _fit_htboost(
                     train[ALL_FEAT].values, train[target].values,
                     test[ALL_FEAT].values, ALL_FEAT, ht_loss, h)
             except Exception as e:
-                print(f"  fold {spec['fold']} FAILED: {type(e).__name__}: {e}")
-                continue
+                # Attempt 2 — fallback only if the proven path threw (e.g. the Windows
+                # SharedArray/@distributed BoundsError). Keep all columns so HTBoost's
+                # internal feature count stays in sync. Untouched on machines where attempt 1 works.
+                print(f"  fold {spec['fold']} fit error ({type(e).__name__}); retrying with all columns...")
+                try:
+                    preds, depth, ntrees, ht_output, ht_data = _fit_htboost(
+                        train[ALL_FEAT].values, train[target].values,
+                        test[ALL_FEAT].values, ALL_FEAT, ht_loss, h, nan_thresh=2.0)
+                except Exception as e2:
+                    print(f"  fold {spec['fold']} FAILED after fallback: {type(e2).__name__}: {e2}")
+                    continue
             a = test[target].values
             fold_results.append({"fold": spec["fold"], "dates": test["Date"].values,
                                  "actuals": a, "preds": preds})
+
+            # HTBrelevance on this fold's fitted model (same call as the holdout run)
+            try:
+                _, _, fns_sorted, fi_sorted, _ = jl.HTBrelevance(ht_output, ht_data, verbose=False)
+                rel_frames.append(pd.Series(np.array(fi_sorted),
+                                            index=[str(f) for f in fns_sorted]))
+            except Exception as e:
+                print(f"    [warn] HTBrelevance fold {spec['fold']} failed: {type(e).__name__}: {e}")
             rmse, rw = metrics.rmse(a, preds), metrics.rw_rmse(a)
             perfold_rows.append({
                 "Horizon": horizon, "Fold": spec["fold"],
@@ -164,6 +190,19 @@ for ht_loss, loss_label in LOSS_FNS:
 
         pooled = pool_fold_results(fold_results)
         pooled.to_csv(f"{RESULTS_DIR}/pooled_preds_{_safe(target)}.csv", index=False)
+
+        # ---- Pooled HTBrelevance (averaged across folds) ----
+        # Same CSV schema as the holdout run (htboost_model.py) so paper_plots.py renders the
+        # "HTB Relevance" bar straight from the full-sample PKF. Features dropped in a fold
+        # (>30% NaN) count as 0 relevance there, so the mean is over all folds.
+        if rel_frames:
+            rel = pd.concat(rel_frames, axis=1).fillna(0.0).mean(axis=1).sort_values(ascending=False)
+            imp_df = pd.DataFrame({"Feature": rel.index, "Importance": rel.values})
+            imp_df.insert(0, "Horizon", horizon)
+            imp_df.to_csv(f"{RESULTS_DIR}/feature_importance_{_safe(target)}.csv", index=False)
+            print(f"  HTBrelevance pooled over {len(rel_frames)} folds | top: "
+                  + ", ".join(rel.head(3).index))
+
         a, p = pooled["Actual"].values, pooled["Predicted"].values
         pl_rmse, pl_rwrm = metrics.rmse(a, p), metrics.rw_rmse(a)
         pl_mae,  pl_rwmae = metrics.mae(a, p), metrics.rw_mae(a)
